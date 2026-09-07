@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { PlanHashRedirect } from "@/components/plan-hash-redirect";
 import { Button } from "@/components/ui/button";
 import { getContactEmail, ownerPlans } from "@/lib/site";
 import { cn } from "@/lib/utils";
@@ -8,7 +9,7 @@ import { cn } from "@/lib/utils";
 export const metadata: Metadata = {
   title: "Owner plans",
   description:
-    "Owner management service plans from Panamerica Auto, LLC — 80/20 standard, 50/50 guaranteed payment, and 20/80 earn-to-own.",
+    "Owner management service plans from Panamerica Auto, LLC — 80/20 standard, 50/50 guaranteed payment, and 20/80 owner exit.",
 };
 
 const accent = {
@@ -28,6 +29,7 @@ export default function PlansPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-14 sm:px-6 sm:py-20">
+      <PlanHashRedirect />
       <p className="font-heading text-xs tracking-[0.28em] text-gold uppercase">
         Owner plans
       </p>
