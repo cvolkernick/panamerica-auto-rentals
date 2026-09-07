@@ -52,12 +52,26 @@ export default function ServicesPage() {
           </article>
         ))}
       </div>
-      <div className="mt-10 flex flex-col gap-3 sm:flex-row">
+      <p className="mt-10 text-base leading-relaxed text-white/70">
+        Placing a vehicle with us? See the{" "}
+        <Link href="/plans" className="text-gold hover:underline">
+          owner management plans
+        </Link>
+        .
+      </p>
+      <div className="mt-6 flex flex-col gap-3 sm:flex-row">
         <Button
           asChild
           className="h-11 bg-red px-5 font-heading tracking-[0.16em] text-white uppercase hover:bg-red/90"
         >
           <Link href="/contact">Contact</Link>
+        </Button>
+        <Button
+          asChild
+          variant="outline"
+          className="h-11 border-white/20 bg-transparent px-5 font-heading tracking-[0.16em] text-white uppercase hover:bg-white/10"
+        >
+          <Link href="/plans">Owner plans</Link>
         </Button>
         <Button
           asChild

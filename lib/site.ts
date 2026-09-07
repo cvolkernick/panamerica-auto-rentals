@@ -60,9 +60,93 @@ export const services = [
   },
 ] as const;
 
+export const ownerPlans = [
+  {
+    slug: "standard-management",
+    split: "80/20",
+    title: "Standard management",
+    accent: "red" as const,
+    ownerShare: "80%",
+    companyShare: "20%",
+    summary:
+      "Owner 80% / company 20%. You cover the car payment, insurance, and all maintenance. We run bookings, pricing, cleaning, setup, delivery, and day-to-day Turo and fleet operations.",
+    details: [
+      {
+        heading: "Split",
+        body: "Owner 80% / company 20%.",
+      },
+      {
+        heading: "Owner pays",
+        body: "Car payment, insurance, and all maintenance.",
+      },
+      {
+        heading: "Company provides",
+        body: "Bookings, pricing, cleaning, setup, delivery, and day-to-day Turo and fleet operations.",
+      },
+    ],
+  },
+  {
+    slug: "guaranteed-payment",
+    split: "50/50",
+    title: "Guaranteed payment + shared OpEx",
+    accent: "blue" as const,
+    ownerShare: "50%",
+    companyShare: "50%",
+    summary:
+      "After shared expenses, remaining profit splits 50/50. The company guarantees the owner's monthly car payment. Insurance splits 50/50. Maintenance splits 50/50 up to $500/month total.",
+    details: [
+      {
+        heading: "Profit split",
+        body: "After shared expenses, remaining profit splits 50/50.",
+      },
+      {
+        heading: "Car payment",
+        body: "The company guarantees the owner's monthly car payment. If the month under-earns, the company makes up the difference. The car payment is not split as an expense line; it is guaranteed.",
+      },
+      {
+        heading: "Insurance",
+        body: "Split 50/50.",
+      },
+      {
+        heading: "Maintenance",
+        body: "Split 50/50 up to $500/month total ($250 each). Amounts above that monthly maximum come out of the owner's share before the profit split is paid.",
+      },
+    ],
+  },
+  {
+    slug: "earn-to-own",
+    split: "20/80",
+    title: "Earn-to-own",
+    accent: "green" as const,
+    ownerShare: "20%",
+    companyShare: "80%",
+    summary:
+      "Owner 20% / company 80%. The company pays the car payment and insurance in full. Maintenance stays 50/50 within the same $500/month cap until the car is paid off and title transfers to the company.",
+    details: [
+      {
+        heading: "Split",
+        body: "Owner 20% / company 80%.",
+      },
+      {
+        heading: "Car payment and insurance",
+        body: "The company pays the car payment and insurance in full.",
+      },
+      {
+        heading: "Maintenance",
+        body: "Still split 50/50 within the same $500/month total cap ($250 each). The company does not pay 100% of maintenance.",
+      },
+      {
+        heading: "Term",
+        body: "Continues until the car is paid off in full. Ownership and title then transfer to the company.",
+      },
+    ],
+  },
+] as const;
+
 export const nav = [
   { href: "/", label: "Home" },
   { href: "/services", label: "Services" },
+  { href: "/plans", label: "Plans" },
   { href: "/about", label: "About" },
   { href: "/contact", label: "Contact" },
 ] as const;
