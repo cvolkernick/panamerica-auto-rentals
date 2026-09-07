@@ -3,7 +3,7 @@ import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { positioning, services, turoGuestUrl } from "@/lib/site";
+import { ownerPlans, positioning, services, turoGuestUrl } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
 const accentBar: Record<(typeof services)[number]["accent"], string> = {
@@ -50,6 +50,13 @@ export default function HomePage() {
                 className="h-12 bg-red px-6 font-heading tracking-[0.18em] text-white uppercase hover:bg-red/90"
               >
                 <Link href="/contact">Get in touch</Link>
+              </Button>
+              <Button
+                asChild
+                variant="outline"
+                className="h-12 border-white/20 bg-transparent px-6 font-heading tracking-[0.18em] text-white uppercase hover:bg-white/10"
+              >
+                <Link href="/plans">Owner plans</Link>
               </Button>
               <Button
                 asChild
@@ -119,6 +126,58 @@ export default function HomePage() {
           >
             <Link href="/contact">Contact</Link>
           </Button>
+        </div>
+      </section>
+
+      <section className="border-t border-white/10">
+        <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-20">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="font-heading text-xs tracking-[0.28em] text-gold uppercase">
+                Owner plans
+              </p>
+              <h2 className="mt-2 text-3xl font-bold text-white sm:text-4xl">
+                Three management plans
+              </h2>
+              <p className="mt-3 max-w-2xl text-base leading-relaxed text-white/70">
+                Service plans for owners who want us to run the car. Splits are
+                owner% / company%. Not an investment offering.
+              </p>
+            </div>
+            <Link
+              href="/plans"
+              className="font-heading text-sm tracking-[0.16em] text-white/70 uppercase hover:text-white"
+            >
+              Read the plans
+            </Link>
+          </div>
+          <div className="mt-8 grid gap-4 md:grid-cols-3">
+            {ownerPlans.map((plan) => (
+              <Card
+                key={plan.slug}
+                className="border-0 bg-navy-mid ring-white/10"
+              >
+                <CardHeader>
+                  <span
+                    aria-hidden
+                    className={cn("mb-3 block h-1 w-12 rounded-full", accentBar[plan.accent])}
+                  />
+                  <p className="font-heading text-[0.7rem] tracking-[0.2em] text-white/50 uppercase">
+                    {plan.split} · Owner {plan.ownerShare} / company{" "}
+                    {plan.companyShare}
+                  </p>
+                  <CardTitle className="font-heading text-xl tracking-[0.12em] text-white uppercase">
+                    <Link href={`/plans#${plan.slug}`} className="hover:text-gold">
+                      {plan.title}
+                    </Link>
+                  </CardTitle>
+                  <CardDescription className="text-base leading-relaxed text-white/70">
+                    {plan.summary}
+                  </CardDescription>
+                </CardHeader>
+              </Card>
+            ))}
+          </div>
         </div>
       </section>
     </div>
