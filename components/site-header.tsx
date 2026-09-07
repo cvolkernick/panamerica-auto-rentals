@@ -85,11 +85,8 @@ export function SiteHeader() {
       <nav
         id="mobile-nav"
         aria-label="Mobile"
-        hidden={!open}
-        className={cn(
-          "border-t border-white/10 bg-navy px-4 py-3 md:hidden",
-          open ? "block" : "hidden"
-        )}
+        className="border-t border-white/10 bg-navy px-4 py-3 md:hidden"
+        style={open ? undefined : { display: "none" }}
       >
         <ul className="flex flex-col gap-1">
           {nav.map((item) => (
