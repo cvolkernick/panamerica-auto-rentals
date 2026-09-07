@@ -20,11 +20,6 @@ export default function PartnersPage() {
       <h1 className="mt-3 text-4xl font-bold text-white sm:text-5xl">
         People we work with
       </h1>
-      <p className="mt-5 text-lg leading-relaxed text-white/75">
-        A short, curated list of fleet partners. Vehicles shown here are the
-        ones we can name. This page is not a Turo scrape, and it does not
-        publish ratings, VINs, or invented listings.
-      </p>
       <p className="mt-4 text-base leading-relaxed text-white/65">
         Want a listing of your own?{" "}
         <Link href="/plans#spotlight" className="text-gold hover:underline">
