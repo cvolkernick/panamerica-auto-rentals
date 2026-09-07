@@ -117,8 +117,7 @@ export default function HomePage() {
         </div>
         <div className="mt-10 rounded-xl bg-navy-mid p-6 ring-1 ring-white/10 sm:flex sm:items-center sm:justify-between sm:p-8">
           <p className="max-w-xl text-base leading-relaxed text-white/80">
-            Need fleet, platform, or logistics help? Write us. This site has no
-            booking engine and no inventory feed.
+            Need fleet, platform, or logistics help? Write us.
           </p>
           <Button
             asChild
