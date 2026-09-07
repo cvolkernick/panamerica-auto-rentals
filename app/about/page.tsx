@@ -58,6 +58,22 @@ export default function AboutPage() {
         </ul>
       </div>
 
+      <section className="mt-10 rounded-xl bg-navy-mid p-6 ring-1 ring-white/10 sm:p-8">
+        <p className="font-heading text-xs tracking-[0.28em] text-gold uppercase">
+          Fleet partners
+        </p>
+        <p className="mt-3 text-base leading-relaxed text-white/80">
+          Meet some of our fleet partners — hosts and operators we work with on
+          Turo and related work.
+        </p>
+        <Link
+          href="/partners"
+          className="mt-4 inline-block font-heading text-sm tracking-[0.16em] text-gold uppercase hover:text-white"
+        >
+          Fleet partners
+        </Link>
+      </section>
+
       <section className="mt-14">
         <p className="font-heading text-xs tracking-[0.28em] text-gold uppercase">
           Legal entity

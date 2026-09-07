@@ -20,10 +20,11 @@ npm start
 
 ## Pages
 
-- `/` — hero (logo + brand), one-liner, three service tiles, owner-plan tiles, contact CTA
+- `/` — hero (logo + brand), one-liner, three service tiles, owner-plan ladder tiles, contact CTA
 - `/services` — fleet management, platform ops (Turo & rideshare), automotive logistics
-- `/plans` — owner management service plans (80/20, 50/50 guaranteed payment, 20/80 owner exit)
-- `/about` — company description and Sunbiz legal facts for Panamerica Auto, LLC
+- `/plans` — owner service ladder: Spotlight (self-serve), then fleet management 80/20, 50/50 guaranteed payment, and 20/80 owner exit
+- `/partners` — curated Fleet partners (no Turo scrape)
+- `/about` — company description, Fleet partners teaser, and Sunbiz legal facts for Panamerica Auto, LLC
 - `/contact` — name / email / message; **Send** opens `mailto:`
 
 ## Contact email

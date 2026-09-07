@@ -3,10 +3,17 @@ import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ownerPlans, positioning, services, turoGuestUrl } from "@/lib/site";
+import {
+  isSelfServePlan,
+  ownerPlans,
+  planAccentBar,
+  positioning,
+  services,
+  turoGuestUrl,
+} from "@/lib/site";
 import { cn } from "@/lib/utils";
 
-const accentBar: Record<(typeof services)[number]["accent"], string> = {
+const serviceAccentBar: Record<(typeof services)[number]["accent"], string> = {
   red: "bg-red",
   blue: "bg-royal",
   green: "bg-green",
@@ -98,7 +105,7 @@ export default function HomePage() {
               <CardHeader>
                 <span
                   aria-hidden
-                  className={cn("mb-3 block h-1 w-12 rounded-full", accentBar[service.accent])}
+                  className={cn("mb-3 block h-1 w-12 rounded-full", serviceAccentBar[service.accent])}
                 />
                 {"eyebrow" in service ? (
                   <p className="font-heading text-[0.7rem] tracking-[0.2em] text-white/50 uppercase">
@@ -136,11 +143,12 @@ export default function HomePage() {
                 Owner plans
               </p>
               <h2 className="mt-2 text-3xl font-bold text-white sm:text-4xl">
-                Three management plans
+                From self-serve to fleet management
               </h2>
               <p className="mt-3 max-w-2xl text-base leading-relaxed text-white/70">
-                Owner plans for people who want the car run for them — clear
-                who pays what, and what share you keep.
+                Spotlight is the entry rung: you still run day-to-day yourself.
+                80/20, 50/50, and Owner exit are fleet management — clear who
+                pays what, and what share you keep.
               </p>
             </div>
             <Link
@@ -150,7 +158,7 @@ export default function HomePage() {
               Read the plans
             </Link>
           </div>
-          <div className="mt-8 grid gap-4 md:grid-cols-3">
+          <div className="mt-8 grid gap-4 md:grid-cols-2">
             {ownerPlans.map((plan) => (
               <Card
                 key={plan.slug}
@@ -159,11 +167,16 @@ export default function HomePage() {
                 <CardHeader>
                   <span
                     aria-hidden
-                    className={cn("mb-3 block h-1 w-12 rounded-full", accentBar[plan.accent])}
+                    className={cn(
+                      "mb-3 block h-1 w-12 rounded-full",
+                      planAccentBar[plan.accent]
+                    )}
                   />
                   <p className="font-heading text-[0.7rem] tracking-[0.2em] text-white/50 uppercase">
-                    {plan.split} · Owner {plan.ownerShare} / company{" "}
-                    {plan.companyShare}
+                    {String(plan.rung).padStart(2, "0")} · {plan.category}
+                    {isSelfServePlan(plan)
+                      ? ` · from $10 / car / month`
+                      : ` · ${plan.split} · Owner ${plan.ownerShare} / company ${plan.companyShare}`}
                   </p>
                   <CardTitle className="font-heading text-xl tracking-[0.12em] text-white uppercase">
                     <Link href={`/plans#${plan.slug}`} className="hover:text-gold">

@@ -77,9 +77,73 @@ export const services = [
   },
 ] as const;
 
+export const planAccentBorder = {
+  gold: "border-gold",
+  red: "border-red",
+  blue: "border-royal",
+  green: "border-green",
+} as const;
+
+export const planAccentBar = {
+  gold: "bg-gold",
+  red: "bg-red",
+  blue: "bg-royal",
+  green: "bg-green",
+} as const;
+
 export const ownerPlans = [
   {
+    slug: "spotlight",
+    kind: "self-serve" as const,
+    category: "Self-serve",
+    rung: 1,
+    title: "Spotlight",
+    accent: "gold" as const,
+    summary:
+      "You still run day-to-day yourself; we list the car for leads and share fleet/market insights — not fleet management.",
+    fee: "Per car / month flat fee",
+    details: [
+      {
+        heading: "Fee",
+        body: "Per car / month flat fee. You stay on your own day-to-day operations.",
+      },
+      {
+        heading: "What we do",
+        body: "We list the car for leads on the Fleet partners page and, on higher rungs, share anonymized fleet and market insights. This is not fleet management.",
+      },
+      {
+        heading: "What you do",
+        body: "You still run day-to-day yourself — bookings, guests, cleaning, and upkeep stay with you.",
+      },
+    ],
+    tiers: [
+      {
+        price: "$10",
+        name: "Listing only",
+        description: "Listing on the Fleet partners page.",
+        status: "available" as const,
+      },
+      {
+        price: "$15",
+        name: "Listing + insights",
+        description:
+          "Listing plus monthly anonymized fleet insights — earnings, expenses, and profitability-style intel.",
+        status: "available" as const,
+      },
+      {
+        price: "$25",
+        name: "Listing + insights + opportunity feed",
+        description:
+          "Listing, insights, and a vehicle-opportunity feed. Shown so the ladder is complete — fulfillment is gated until the feed exists.",
+        status: "coming" as const,
+      },
+    ],
+  },
+  {
     slug: "standard-management",
+    kind: "fleet-management" as const,
+    category: "Fleet management",
+    rung: 2,
     split: "80/20",
     title: "Standard management",
     accent: "red" as const,
@@ -104,6 +168,9 @@ export const ownerPlans = [
   },
   {
     slug: "guaranteed-payment",
+    kind: "fleet-management" as const,
+    category: "Fleet management",
+    rung: 3,
     split: "50/50",
     title: "Guaranteed payment + shared OpEx",
     accent: "blue" as const,
@@ -132,6 +199,9 @@ export const ownerPlans = [
   },
   {
     slug: "owner-exit",
+    kind: "fleet-management" as const,
+    category: "Fleet management",
+    rung: 4,
     split: "20/80",
     title: "Owner exit",
     accent: "green" as const,
@@ -160,10 +230,71 @@ export const ownerPlans = [
   },
 ] as const;
 
+export type OwnerPlan = (typeof ownerPlans)[number];
+
+export function isSelfServePlan(
+  plan: OwnerPlan
+): plan is Extract<OwnerPlan, { kind: "self-serve" }> {
+  return plan.kind === "self-serve";
+}
+
+export function isFleetManagementPlan(
+  plan: OwnerPlan
+): plan is Extract<OwnerPlan, { kind: "fleet-management" }> {
+  return plan.kind === "fleet-management";
+}
+
+export const fleetPartners = [
+  {
+    slug: "mike-volkernick",
+    name: "Mike Volkernick",
+    accent: "gold" as const,
+    vehicles: ["Toyota Corolla 2022", "Toyota Corolla 2024"],
+    note: null,
+    profileStatus: null,
+    links: [
+      {
+        label: "Turo",
+        href: "https://turo.com/us/en/drivers/27172979",
+      },
+    ],
+  },
+  {
+    slug: "vivek",
+    name: "Vivekanandhan Vijayachandran",
+    shortName: "Vivek",
+    accent: "red" as const,
+    vehicles: ["Rivian R1S 2023"],
+    note: "2023 Rivian R1S owner / partner.",
+    profileStatus: "coming" as const,
+    links: [],
+  },
+  {
+    slug: "safewheels",
+    name: "Alex Djahankhah",
+    brand: "SafeWheels Rentals",
+    accent: "blue" as const,
+    vehicles: [],
+    note: "Southwest Florida peer. We have collaborated on listings before, including reciprocal listing.",
+    profileStatus: null,
+    links: [
+      {
+        label: "Website",
+        href: "https://safewheelsrentalsswfl.com",
+      },
+      {
+        label: "Turo",
+        href: "https://turo.com/us/en/drivers/795431",
+      },
+    ],
+  },
+] as const;
+
 export const nav = [
   { href: "/", label: "Home" },
   { href: "/services", label: "Services" },
   { href: "/plans", label: "Plans" },
+  { href: "/partners", label: "Partners" },
   { href: "/about", label: "About" },
   { href: "/contact", label: "Contact" },
 ] as const;
