@@ -20,13 +20,6 @@ export default function ContactPage() {
         <h1 className="mt-3 text-4xl font-bold text-white sm:text-5xl">
           Send a note
         </h1>
-        <p className="mt-5 max-w-xl text-lg leading-relaxed text-white/75">
-          Name, email, and a message. Send opens your mail app addressed to{" "}
-          <a href={`mailto:${email}`} className="text-gold hover:underline">
-            {email}
-          </a>
-          . There is no booking form and no phone number on this site.
-        </p>
         <div className="mt-8 rounded-xl bg-navy-mid p-5 ring-1 ring-white/10 sm:p-8">
           <ContactForm email={email} />
         </div>
