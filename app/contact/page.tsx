@@ -1,7 +1,12 @@
 import type { Metadata } from "next";
 
 import { ContactForm } from "@/components/contact-form";
-import { getContactEmail, turoGuestUrl } from "@/lib/site";
+import {
+  CONTACT_PHONE_DISPLAY,
+  CONTACT_PHONE_TEL,
+  getContactEmail,
+  turoGuestUrl,
+} from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Contact",
@@ -29,6 +34,12 @@ export default function ContactPage() {
         <p className="mt-3 text-sm leading-relaxed text-white/70">
           Prefer to skip the form?
         </p>
+        <a
+          href={`tel:${CONTACT_PHONE_TEL}`}
+          className="mt-3 block text-gold hover:underline"
+        >
+          {CONTACT_PHONE_DISPLAY}
+        </a>
         <a
           href={`mailto:${email}`}
           className="mt-3 block break-all text-gold hover:underline"

@@ -1,5 +1,8 @@
 export const CONTACT_EMAIL_DEFAULT = "panamerica.cars@gmail.com";
 
+export const CONTACT_PHONE_DISPLAY = "(904) 334-3975";
+export const CONTACT_PHONE_TEL = "+19043343975";
+
 export function getContactEmail() {
   return (
     process.env.CONTACT_EMAIL?.trim() ||

@@ -1,6 +1,12 @@
 import Link from "next/link";
 
-import { getContactEmail, legal, nav } from "@/lib/site";
+import {
+  CONTACT_PHONE_DISPLAY,
+  CONTACT_PHONE_TEL,
+  getContactEmail,
+  legal,
+  nav,
+} from "@/lib/site";
 
 export function SiteFooter() {
   const email = getContactEmail();
@@ -30,6 +36,14 @@ export function SiteFooter() {
                   </Link>
                 </li>
               ))}
+              <li>
+                <a
+                  href={`tel:${CONTACT_PHONE_TEL}`}
+                  className="font-heading text-xs tracking-[0.16em] text-gold uppercase hover:text-white"
+                >
+                  {CONTACT_PHONE_DISPLAY}
+                </a>
+              </li>
               <li>
                 <a
                   href={`mailto:${email}`}
