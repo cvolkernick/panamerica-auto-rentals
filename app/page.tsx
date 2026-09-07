@@ -139,8 +139,8 @@ export default function HomePage() {
                 Three management plans
               </h2>
               <p className="mt-3 max-w-2xl text-base leading-relaxed text-white/70">
-                Service plans for owners who want us to run the car. Splits are
-                owner% / company%. Not an investment offering.
+                Owner plans for people who want the car run for them — clear
+                who pays what, and what share you keep.
               </p>
             </div>
             <Link

@@ -114,9 +114,9 @@ export const ownerPlans = [
     ],
   },
   {
-    slug: "earn-to-own",
+    slug: "owner-exit",
     split: "20/80",
-    title: "Earn-to-own",
+    title: "Owner exit",
     accent: "green" as const,
     ownerShare: "20%",
     companyShare: "80%",
@@ -133,7 +133,7 @@ export const ownerPlans = [
       },
       {
         heading: "Maintenance",
-        body: "Still split 50/50 within the same $500/month total cap ($250 each). The company does not pay 100% of maintenance.",
+        body: "Split 50/50 within the $500/month total cap ($250 each).",
       },
       {
         heading: "Term",
