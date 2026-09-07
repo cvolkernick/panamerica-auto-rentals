@@ -29,6 +29,23 @@ export const turoGuestUrl = "https://turo.com/us/en/drivers/27172979";
 export const positioning =
   "Fleet management and automotive logistics, specializing in management of assets on Turo and other rideshare platforms.";
 
+export const about = {
+  title: "Who we are",
+  paragraphs: [
+    "We are a small but capable team of well-established fleet management experts handling all aspects of fleet operations, customer service, logistics, and management. We handle everything from day-to-day cleanings and operations to guest communications, vehicle maintenance and upkeep, and site delivery.",
+    "We have over a decade of combined experience with fleets of all sizes, ranging from a few vehicles to aggregate fleets of over 100. We have experience across a diverse set of Southeastern markets, including Orlando, Jacksonville, Tampa, St. Pete, Fort Myers, Cape Coral, and Punta Gorda.",
+  ],
+  markets: [
+    "Orlando",
+    "Jacksonville",
+    "Tampa",
+    "St. Pete",
+    "Fort Myers",
+    "Cape Coral",
+    "Punta Gorda",
+  ],
+} as const;
+
 export const services = [
   {
     slug: "fleet-management",
