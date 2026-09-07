@@ -15,7 +15,7 @@ export function SiteHeader() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-white/10 bg-navy/85 backdrop-blur-md">
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
+      <div className="relative mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
         <Link
           href="/"
           className="flex items-center gap-3 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
@@ -73,7 +73,7 @@ export function SiteHeader() {
           type="button"
           variant="outline"
           size="sm"
-          className="h-9 border-white/20 bg-transparent px-3 font-heading tracking-[0.14em] text-white uppercase hover:bg-white/10 md:hidden"
+          className="h-9 min-w-[4.5rem] border-white/20 bg-transparent px-3 font-heading tracking-[0.14em] text-white uppercase hover:bg-white/10 md:hidden"
           aria-expanded={open}
           aria-controls="mobile-nav"
           onClick={() => setOpen((value) => !value)}
@@ -82,27 +82,29 @@ export function SiteHeader() {
         </Button>
       </div>
 
-      {open ? (
-        <nav
-          id="mobile-nav"
-          aria-label="Mobile"
-          className="border-t border-white/10 px-4 py-3 md:hidden"
-        >
-          <ul className="flex flex-col gap-1">
-            {nav.map((item) => (
-              <li key={item.href}>
-                <Link
-                  href={item.href}
-                  onClick={() => setOpen(false)}
-                  className="block rounded-md px-3 py-3 font-heading tracking-[0.16em] text-white uppercase hover:bg-white/5"
-                >
-                  {item.label}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </nav>
-      ) : null}
+      <nav
+        id="mobile-nav"
+        aria-label="Mobile"
+        hidden={!open}
+        className={cn(
+          "border-t border-white/10 bg-navy px-4 py-3 md:hidden",
+          open ? "block" : "hidden"
+        )}
+      >
+        <ul className="flex flex-col gap-1">
+          {nav.map((item) => (
+            <li key={item.href}>
+              <Link
+                href={item.href}
+                onClick={() => setOpen(false)}
+                className="block rounded-md px-3 py-3 font-heading tracking-[0.16em] text-white uppercase hover:bg-white/5"
+              >
+                {item.label}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </nav>
     </header>
   );
 }
