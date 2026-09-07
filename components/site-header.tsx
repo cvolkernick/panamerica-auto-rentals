@@ -15,7 +15,7 @@ export function SiteHeader() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-white/10 bg-navy/85 backdrop-blur-md">
-      <div className="relative mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
+      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
         <Link
           href="/"
           className="flex items-center gap-3 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
@@ -82,26 +82,27 @@ export function SiteHeader() {
         </Button>
       </div>
 
-      <nav
-        id="mobile-nav"
-        aria-label="Mobile"
-        className="border-t border-white/10 bg-navy px-4 py-3 md:hidden"
-        style={open ? undefined : { display: "none" }}
-      >
-        <ul className="flex flex-col gap-1">
-          {nav.map((item) => (
-            <li key={item.href}>
-              <Link
-                href={item.href}
-                onClick={() => setOpen(false)}
-                className="block rounded-md px-3 py-3 font-heading tracking-[0.16em] text-white uppercase hover:bg-white/5"
-              >
-                {item.label}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </nav>
+      {open ? (
+        <nav
+          id="mobile-nav"
+          aria-label="Mobile"
+          className="border-t border-white/10 bg-navy px-4 py-3 md:hidden"
+        >
+          <ul className="flex flex-col gap-1">
+            {nav.map((item) => (
+              <li key={item.href}>
+                <Link
+                  href={item.href}
+                  onClick={() => setOpen(false)}
+                  className="block rounded-md px-3 py-3 font-heading tracking-[0.16em] text-white uppercase hover:bg-white/5"
+                >
+                  {item.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      ) : null}
     </header>
   );
 }
