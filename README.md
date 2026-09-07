@@ -23,7 +23,7 @@ npm start
 - `/` — hero (logo + brand), one-liner, three service tiles, owner-plan tiles, contact CTA
 - `/services` — fleet management, platform ops (Turo & rideshare), automotive logistics
 - `/plans` — owner management service plans (80/20, 50/50 guaranteed payment, 20/80 owner exit)
-- `/about` — Sunbiz legal facts for Panamerica Auto, LLC
+- `/about` — company description and Sunbiz legal facts for Panamerica Auto, LLC
 - `/contact` — name / email / message; **Send** opens `mailto:`
 
 ## Contact email
