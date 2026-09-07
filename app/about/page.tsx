@@ -7,7 +7,7 @@ import { about, getContactEmail, legal } from "@/lib/site";
 export const metadata: Metadata = {
   title: "About",
   description:
-    "A small, capable fleet management team with over a decade of combined experience across Southeastern markets — Panamerica Auto Rentals, the trade name of Panamerica Auto, LLC.",
+    "A small, highly capable fleet management team with over a decade of combined experience across Southeastern markets — Panamerica Auto Rentals, the trade name of Panamerica Auto, LLC.",
 };
 
 const facts = [
