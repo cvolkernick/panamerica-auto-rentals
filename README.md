@@ -37,6 +37,22 @@ Override with `CONTACT_EMAIL` (Vercel env or `.env.local`):
 CONTACT_EMAIL=panamerica.cars@gmail.com
 ```
 
+## Link previews (Open Graph)
+
+Home, `/plans`, `/partners`, `/services`, `/about`, and `/contact` emit Open Graph + Twitter `summary_large_image` tags. Canonical share URL is the apex, `https://panamericafleet.com` (a 308 to www is fine — crawlers follow it). The thumbnail is the branded `public/og.jpg` (1200×630), served at `/og.jpg` with no auth.
+
+After a production deploy, force a re-scrape so iMessage / Slack / Facebook / LinkedIn drop the old empty preview:
+
+- [Facebook Sharing Debugger](https://developers.facebook.com/tools/debug/) — scrape `https://panamericafleet.com`
+- [opengraph.xyz](https://www.opengraph.xyz/) — same URL
+- Slack and iMessage cache the first fetch; they usually refresh after the Facebook scrape or after sharing with a one-time `?v=2` query (do not leave a query on the public canonical)
+
+Rebuild the thumbnail from the logo if the brand mark changes:
+
+```bash
+python3 scripts/build-og-image.py
+```
+
 ## Deploy on Vercel via Origin
 
 This repository is meant to live on Origin under `chrisv-btc`. Chris’s Vercel account is already connected to Origin — create a Vercel project and import the Origin repo (do not add a GitHub mirror as a deploy workaround).

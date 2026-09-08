@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { ContactForm } from "@/components/contact-form";
+import { SITE_NAME, socialMetadata } from "@/lib/seo";
 import {
   CONTACT_PHONE_DISPLAY,
   CONTACT_PHONE_TEL,
@@ -8,9 +9,17 @@ import {
   turoGuestUrl,
 } from "@/lib/site";
 
+const description =
+  "Write Panamerica Auto Rentals. Messages open in your mail app.";
+
 export const metadata: Metadata = {
   title: "Contact",
-  description: "Write Panamerica Auto Rentals. Messages open in your mail app.",
+  description,
+  ...socialMetadata({
+    title: `Contact · ${SITE_NAME}`,
+    description,
+    path: "/contact",
+  }),
 };
 
 export default function ContactPage() {
