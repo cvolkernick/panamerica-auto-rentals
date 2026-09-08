@@ -4,7 +4,9 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
+  isFleetManagementPlan,
   isSelfServePlan,
+  noLockInTeaser,
   ownerPlans,
   planAccentBar,
   positioning,
@@ -150,6 +152,9 @@ export default function HomePage() {
                 80/20, 50/50, and Owner exit are fleet management — clear who
                 pays what, and what share you keep.
               </p>
+              <p className="mt-3 max-w-2xl text-base leading-relaxed text-gold/90">
+                {noLockInTeaser.body}
+              </p>
             </div>
             <Link
               href="/plans"
@@ -185,6 +190,12 @@ export default function HomePage() {
                   </CardTitle>
                   <CardDescription className="text-base leading-relaxed text-white/70">
                     {plan.summary}
+                    {isFleetManagementPlan(plan) ? (
+                      <span className="mt-3 block text-sm leading-relaxed text-white/55">
+                        Includes Spotlight listing + insights. Opportunities
+                        Coming.
+                      </span>
+                    ) : null}
                   </CardDescription>
                 </CardHeader>
               </Card>
