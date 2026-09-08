@@ -94,6 +94,18 @@ export const planAccentBar = {
   green: "bg-green",
 } as const;
 
+/** Public teaser — month-to-month / 30-day notice only. Not extra legal claims. */
+export const noLockInTeaser = {
+  eyebrow: "No lock-in",
+  body: "Management agreements are month-to-month. Either party can end with 30 days' written notice — not a typical 6–12 month manager contract.",
+} as const;
+
+/** Included on every fleet-management plan. Opportunities stays Coming. */
+export const fleetSpotlightIncluded = {
+  heading: "Spotlight included",
+  body: "Listing on the Panamerica site plus market insights. The Spotlight Opportunities feed ($25) is Coming — not live and not checkoutable until that feed exists.",
+} as const;
+
 export const ownerPlans = [
   {
     slug: "spotlight",
@@ -167,6 +179,7 @@ export const ownerPlans = [
         heading: "Company provides",
         body: "Bookings, pricing, cleaning, setup, delivery, and day-to-day Turo and fleet operations.",
       },
+      fleetSpotlightIncluded,
     ],
   },
   {
@@ -198,6 +211,7 @@ export const ownerPlans = [
         heading: "Maintenance",
         body: "Split 50/50 up to $500/month total ($250 each). Amounts above that monthly maximum come out of the owner's share before the profit split is paid.",
       },
+      fleetSpotlightIncluded,
     ],
   },
   {
@@ -225,6 +239,7 @@ export const ownerPlans = [
         heading: "Maintenance",
         body: "Split 50/50 within the $500/month total cap ($250 each).",
       },
+      fleetSpotlightIncluded,
       {
         heading: "Term",
         body: "Continues until the car is paid off in full. Ownership and title then transfer to the company.",

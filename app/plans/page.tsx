@@ -7,6 +7,7 @@ import { SITE_NAME, socialMetadata } from "@/lib/seo";
 import {
   getContactEmail,
   isSelfServePlan,
+  noLockInTeaser,
   ownerPlans,
   planAccentBar,
   planAccentBorder,
@@ -48,6 +49,18 @@ export default function PlansPage() {
         These are operations and fleet-management services — not an investment,
         security, or offer to sell a security.
       </p>
+
+      <aside
+        className="mt-8 rounded-xl border border-gold/30 bg-navy-mid p-6 ring-1 ring-white/10 sm:p-8"
+        aria-label="No long-term lock-in"
+      >
+        <p className="font-heading text-[0.7rem] tracking-[0.22em] text-gold uppercase">
+          {noLockInTeaser.eyebrow}
+        </p>
+        <p className="mt-3 text-base leading-relaxed text-white/80">
+          {noLockInTeaser.body}
+        </p>
+      </aside>
 
       <ol className="mt-10 grid gap-8">
         {ownerPlans.map((plan) => (
