@@ -301,3 +301,8 @@ export const nav = [
   { href: "/about", label: "About" },
   { href: "/contact", label: "Contact" },
 ] as const;
+
+export const cyberfleetNav = {
+  href: "/cyberfleet",
+  label: "Cyber Fleet",
+} as const;

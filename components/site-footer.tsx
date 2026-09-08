@@ -3,6 +3,7 @@ import Link from "next/link";
 import {
   CONTACT_PHONE_DISPLAY,
   CONTACT_PHONE_TEL,
+  cyberfleetNav,
   getContactEmail,
   legal,
   nav,
@@ -36,6 +37,14 @@ export function SiteFooter() {
                   </Link>
                 </li>
               ))}
+              <li>
+                <Link
+                  href={cyberfleetNav.href}
+                  className="font-heading text-xs tracking-[0.16em] text-white/40 uppercase hover:text-white/70"
+                >
+                  {cyberfleetNav.label}
+                </Link>
+              </li>
               <li>
                 <a
                   href={`tel:${CONTACT_PHONE_TEL}`}

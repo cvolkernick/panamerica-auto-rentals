@@ -136,6 +136,26 @@ export default function PlansPage() {
         ))}
       </ol>
 
+      <aside
+        className="mt-10 rounded-xl border border-white/10 bg-navy-mid/70 px-6 py-5 ring-1 ring-white/10 sm:px-8"
+        aria-label="Cyber Fleet coming soon"
+      >
+        <p className="font-heading text-[0.7rem] tracking-[0.22em] text-gold uppercase">
+          Coming soon
+        </p>
+        <p className="mt-3 text-base leading-relaxed text-white/75">
+          Cyber Fleet is a fifth rung we are preparing for peer fleet operators
+          who want a path from a legacy Turo book toward autonomy. It is not a
+          live offering and there is no checkout.
+        </p>
+        <Link
+          href="/cyberfleet"
+          className="mt-4 inline-block font-heading text-sm tracking-[0.16em] text-gold uppercase hover:underline"
+        >
+          Cyber Fleet
+        </Link>
+      </aside>
+
       <p className="mt-10 text-sm leading-relaxed text-white/55">
         This page is general information about our services, not legal or tax
         advice. A written agreement confirms terms for any vehicle.
