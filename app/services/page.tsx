@@ -2,13 +2,21 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
+import { SITE_NAME, socialMetadata } from "@/lib/seo";
 import { services, turoGuestUrl } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
+const description =
+  "Fleet management, Turo and rideshare platform operations, and automotive logistics from Panamerica Auto, LLC.";
+
 export const metadata: Metadata = {
   title: "Services",
-  description:
-    "Fleet management, Turo and rideshare platform operations, and automotive logistics from Panamerica Auto, LLC.",
+  description,
+  ...socialMetadata({
+    title: `Services · ${SITE_NAME}`,
+    description,
+    path: "/services",
+  }),
 };
 
 const accent = {

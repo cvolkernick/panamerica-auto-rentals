@@ -3,6 +3,7 @@ import { Barlow_Condensed, DM_Sans } from "next/font/google";
 
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { SITE_NAME, SITE_URL, socialMetadata } from "@/lib/seo";
 import { positioning } from "@/lib/site";
 
 import "./globals.css";
@@ -19,11 +20,17 @@ const barlow = Barlow_Condensed({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: {
-    default: "Panamerica Auto Rentals",
-    template: "%s · Panamerica Auto Rentals",
+    default: SITE_NAME,
+    template: `%s · ${SITE_NAME}`,
   },
   description: positioning,
+  ...socialMetadata({
+    title: SITE_NAME,
+    description: positioning,
+    path: "/",
+  }),
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

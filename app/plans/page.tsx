@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { PlanHashRedirect } from "@/components/plan-hash-redirect";
 import { Button } from "@/components/ui/button";
+import { SITE_NAME, socialMetadata } from "@/lib/seo";
 import {
   getContactEmail,
   isSelfServePlan,
@@ -12,10 +13,17 @@ import {
 } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
+const description =
+  "Owner plans from Panamerica Auto, LLC — Spotlight self-serve listing, then fleet management: 80/20 standard, 50/50 guaranteed payment, and 20/80 owner exit.";
+
 export const metadata: Metadata = {
   title: "Owner plans",
-  description:
-    "Owner plans from Panamerica Auto, LLC — Spotlight self-serve listing, then fleet management: 80/20 standard, 50/50 guaranteed payment, and 20/80 owner exit.",
+  description,
+  ...socialMetadata({
+    title: `Owner plans · ${SITE_NAME}`,
+    description,
+    path: "/plans",
+  }),
 };
 
 export default function PlansPage() {

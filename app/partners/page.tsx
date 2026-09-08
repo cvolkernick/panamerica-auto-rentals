@@ -2,13 +2,21 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
+import { SITE_NAME, socialMetadata } from "@/lib/seo";
 import { fleetPartners, planAccentBar, planAccentBorder } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
+const description =
+  "Curated fleet partners of Panamerica Auto, LLC — hosts and operators we work with. No scraped listings, ratings, or invented vehicles.";
+
 export const metadata: Metadata = {
   title: "Fleet partners",
-  description:
-    "Curated fleet partners of Panamerica Auto, LLC — hosts and operators we work with. No scraped listings, ratings, or invented vehicles.",
+  description,
+  ...socialMetadata({
+    title: `Fleet partners · ${SITE_NAME}`,
+    description,
+    path: "/partners",
+  }),
 };
 
 export default function PartnersPage() {
