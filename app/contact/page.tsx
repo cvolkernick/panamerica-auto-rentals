@@ -6,6 +6,7 @@ import {
   CONTACT_PHONE_DISPLAY,
   CONTACT_PHONE_TEL,
   getContactEmail,
+  publicListings,
   turoGuestUrl,
 } from "@/lib/site";
 
@@ -55,6 +56,21 @@ export default function ContactPage() {
         >
           {email}
         </a>
+        <h2 className="mt-8 text-lg font-bold text-white">Find us on</h2>
+        <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
+          {publicListings.map((listing) => (
+            <li key={listing.href}>
+              <a
+                href={listing.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-heading text-sm tracking-[0.16em] text-gold uppercase hover:text-white"
+              >
+                {listing.label}
+              </a>
+            </li>
+          ))}
+        </ul>
         <h2 className="mt-8 text-lg font-bold text-white">Guests</h2>
         <p className="mt-3 text-sm leading-relaxed text-white/70">
           Looking for a car on Turo? Use the public host profile.

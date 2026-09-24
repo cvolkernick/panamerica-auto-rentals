@@ -29,6 +29,18 @@ export const legal = {
 
 export const turoGuestUrl = "https://turo.com/us/en/drivers/27172979";
 
+/** Public listings only. Yelp stays out until a real URL exists. */
+export const publicListings = [
+  {
+    label: "Google",
+    href: "https://www.google.com/maps/place/Panamerica+Auto,+LLC/@26.5528964,-82.0120959,10z/data=!3m1!4b1!4m6!3m5!1s0x2099d2430ae358cd:0xb38032a56810505e!8m2!3d26.5528964!4d-82.0120959!16s%2Fg%2F11zxhw_6qh",
+  },
+  {
+    label: "Facebook",
+    href: "https://www.facebook.com/profile.php?id=61594162294583",
+  },
+] as const;
+
 export const positioning =
   "Fleet management and automotive logistics, specializing in management of assets on Turo and other rideshare platforms.";
 
