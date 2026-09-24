@@ -7,6 +7,7 @@ import {
   getContactEmail,
   legal,
   nav,
+  publicListings,
 } from "@/lib/site";
 
 export function SiteFooter() {
@@ -35,6 +36,18 @@ export function SiteFooter() {
                   >
                     {item.label}
                   </Link>
+                </li>
+              ))}
+              {publicListings.map((listing) => (
+                <li key={listing.href}>
+                  <a
+                    href={listing.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-heading text-xs tracking-[0.16em] text-white/70 uppercase hover:text-white"
+                  >
+                    {listing.label}
+                  </a>
                 </li>
               ))}
               <li>
