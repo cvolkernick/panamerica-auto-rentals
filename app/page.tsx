@@ -11,7 +11,6 @@ import {
   planAccentBar,
   positioning,
   services,
-  turoGuestUrl,
 } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
@@ -72,9 +71,7 @@ export default function HomePage() {
                 variant="outline"
                 className="h-12 border-white/20 bg-transparent px-6 font-heading tracking-[0.18em] text-white uppercase hover:bg-white/10"
               >
-                <a href={turoGuestUrl} rel="noopener noreferrer">
-                  Turo
-                </a>
+                <Link href="/fleet">Our Fleet</Link>
               </Button>
             </div>
           </div>

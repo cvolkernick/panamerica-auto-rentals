@@ -11,6 +11,13 @@ export function getContactEmail() {
   );
 }
 
+/** Display join for a readonly name list: "A", "A and B", "A, B, and C". */
+export function formatNameList(names: readonly string[]): string {
+  if (names.length <= 1) return names[0] ?? "";
+  if (names.length === 2) return `${names[0]} and ${names[1]}`;
+  return `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;
+}
+
 export const legal = {
   tradeName: "Panamerica Auto Rentals",
   entityName: "Panamerica Auto, LLC",
@@ -18,7 +25,7 @@ export const legal = {
   status: "Active",
   jurisdiction: "Florida LLC",
   filed: "2026-05-27",
-  authorizedMember: "Thais Lira",
+  authorizedMembers: ["Chris Volkernick", "Thais Lira"],
   registeredAgent: {
     name: "Registered Agents Inc",
     address: "7901 4th St N Ste 300, St. Petersburg, FL 33702",
@@ -29,17 +36,8 @@ export const legal = {
 
 export const turoGuestUrl = "https://turo.com/us/en/drivers/27172979";
 
-/** Public listings only. Yelp stays out until a real URL exists. */
-export const publicListings = [
-  {
-    label: "Google",
-    href: "https://www.google.com/maps/place/Panamerica+Auto,+LLC/@26.5528964,-82.0120959,10z/data=!3m1!4b1!4m6!3m5!1s0x2099d2430ae358cd:0xb38032a56810505e!8m2!3d26.5528964!4d-82.0120959!16s%2Fg%2F11zxhw_6qh",
-  },
-  {
-    label: "Facebook",
-    href: "https://www.facebook.com/profile.php?id=61594162294583",
-  },
-] as const;
+/** 15-minute intro call (Google Calendar appointment schedule, organizer Panamerica). */
+export const introCallUrl = "https://calendar.app.google/Kpfn3aeKQ2VvZyeQ6";
 
 export const positioning =
   "Fleet management and automotive logistics, specializing in management of assets on Turo and other rideshare platforms.";
@@ -82,10 +80,10 @@ export const about = {
       "Turo was my first work in the car business, and I learned it by doing it. I also hold a computer science degree and have a software development background in web and mobile apps. I'm also experimenting with AI and automation solutions in the business, and I'm exploring branching out into the autonomous vehicle market as it emerges, including the Cybercab.",
     ],
   },
-  teamMember: {
-    name: legal.authorizedMember,
+  coFounder: {
+    name: "Thais Lira",
     bio: [
-      "Thais Lira is the authorized member of Panamerica Auto, LLC and a member of the Panamerica Auto Rentals team. She has 3+ years of experience in customer service and business administration, including fleet management coordination, virtual support, and overseeing customer service teams. She studied international relations and governance, and has experience supporting clients and vendors across borders and in more than one language.",
+      "I bring more than four years of experience in customer service and business administration to Panamerica Auto Rentals. I manage and coordinate all aspects of our fleet management, and I provide virtual support to guests and to our team. I've also overseen customer service teams, so I know what it takes to keep service consistent, responsive, and friendly. I'm currently specializing in international relations and governance studies, which helps me with cross-border coordination, international client and vendor relations, and multilingual support. I enjoy making the rental experience simple for guests and dependable for the owners we work with.",
     ],
   },
 } as const;
@@ -108,7 +106,7 @@ export const services = [
     summary:
       "Hands-on operations for assets listed on Turo and other rideshare platforms — listings, guest-facing workflow, and platform process.",
     description:
-      "Platform work is the daily rhythm of keeping listings current and handling the operational side of Turo and similar rideshare marketplaces. Guests who want to browse available cars can use our public Turo profile. This site does not scrape Turo and does not list vehicles, prices, plates, or VINs.",
+      "Platform work is the daily rhythm of keeping listings current and handling the operational side of Turo and similar rideshare marketplaces. Managed cars are on the Fleet page with a Turo booking link. This site does not scrape Turo and does not publish prices, plates, or VINs.",
   },
   {
     slug: "automotive-logistics",
@@ -308,7 +306,12 @@ export const fleetPartners = [
     slug: "mike-volkernick",
     name: "Mike Volkernick",
     accent: "gold" as const,
-    vehicles: ["Toyota Corolla 2022", "Toyota Corolla 2024"],
+    vehicles: [
+      "Toyota Corolla 2022",
+      "Toyota Corolla 2024",
+      "Tesla Model 3 2022",
+      "Tesla Model 3 2020",
+    ],
     note: null,
     profileStatus: null,
     links: [
@@ -351,12 +354,52 @@ export const fleetPartners = [
 
 export const nav = [
   { href: "/", label: "Home" },
+  { href: "/fleet", label: "Fleet" },
   { href: "/services", label: "Services" },
   { href: "/plans", label: "Plans" },
   { href: "/partners", label: "Partners" },
   { href: "/about", label: "About" },
   { href: "/contact", label: "Contact" },
 ] as const;
+
+/** NAP web URL. Apex `panamericafleet.com` 308s here. Canonical and Open Graph use the same host (`SITE_URL`). */
+export const PUBLIC_WEB_URL = "https://www.panamericafleet.com";
+
+/**
+ * Public local listings. Yelp stays off this list until a public URL exists.
+ * Footer and /contact only — do not add these to `nav`.
+ */
+export const localListings = [
+  {
+    id: "google",
+    label: "Google",
+    href: "https://www.google.com/maps/place/Panamerica+Auto,+LLC/@26.5528964,-82.0120959,10z/data=!3m1!4b1!4m6!3m5!1s0x2099d2430ae358cd:0xb38032a56810505e!8m2!3d26.5528964!4d-82.0120959!16s%2Fg%2F11zxhw_6qh",
+  },
+  {
+    id: "facebook",
+    label: "Facebook",
+    href: "https://www.facebook.com/profile.php?id=61594162294583",
+  },
+] as const;
+
+/** Service-area business. No public street — GBP is Lee County / SWFL. */
+export const serviceAreas = ["Lee County, Florida", "Southwest Florida"] as const;
+
+export function localBusinessJsonLd(email: string) {
+  return {
+    "@context": "https://schema.org",
+    "@type": ["Organization", "LocalBusiness"],
+    name: legal.entityName,
+    telephone: CONTACT_PHONE_TEL,
+    email,
+    url: PUBLIC_WEB_URL,
+    sameAs: localListings.map((item) => item.href),
+    areaServed: serviceAreas.map((name) => ({
+      "@type": "AdministrativeArea",
+      name,
+    })),
+  };
+}
 
 export const cyberfleetNav = {
   href: "/cyberfleet",

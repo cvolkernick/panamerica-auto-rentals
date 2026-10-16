@@ -3,7 +3,7 @@ import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import { SITE_NAME, socialMetadata } from "@/lib/seo";
-import { about, getContactEmail, legal } from "@/lib/site";
+import { about, formatNameList, getContactEmail, legal } from "@/lib/site";
 
 const description =
   "A small, highly capable fleet management team with over a decade of combined experience across Southeastern markets — Panamerica Auto Rentals, the trade name of Panamerica Auto, LLC.";
@@ -25,7 +25,7 @@ const facts = [
   ["Status", legal.status],
   ["Entity type", legal.jurisdiction],
   ["Filed", legal.filed],
-  ["Authorized member", legal.authorizedMember],
+  ["Authorized members", formatNameList(legal.authorizedMembers)],
   ["Registered agent", legal.registeredAgent.name],
   ["Registered agent address", legal.registeredAgent.address],
 ] as const;
@@ -35,31 +35,29 @@ type Person = {
   readonly bio: readonly string[];
 };
 
-function PersonSection({
-  eyebrow,
-  person,
-}: {
-  eyebrow: string;
-  person: Person;
-}) {
+function FoundersSection({ people }: { people: readonly Person[] }) {
   return (
     <section className="mt-14">
       <p className="font-heading text-xs tracking-[0.28em] text-gold uppercase">
-        {eyebrow}
+        Meet the founders
       </p>
-      <h2 className="mt-3 text-2xl font-bold text-white sm:text-3xl">
-        {person.name}
-      </h2>
-      <div className="mt-6 rounded-xl bg-navy-mid p-6 ring-1 ring-white/10 sm:p-8">
-        {person.bio.map((paragraph, index) => (
-          <p
-            key={paragraph}
-            className={`${index === 0 ? "" : "mt-5 "}text-base leading-relaxed text-white/80 sm:text-lg`}
-          >
-            {paragraph}
-          </p>
-        ))}
-      </div>
+      {people.map((person, personIndex) => (
+        <div key={person.name} className={personIndex === 0 ? "" : "mt-10"}>
+          <h2 className="mt-3 text-2xl font-bold text-white sm:text-3xl">
+            {person.name}
+          </h2>
+          <div className="mt-6 rounded-xl bg-navy-mid p-6 ring-1 ring-white/10 sm:p-8">
+            {person.bio.map((paragraph, index) => (
+              <p
+                key={paragraph}
+                className={`${index === 0 ? "" : "mt-5 "}text-base leading-relaxed text-white/80 sm:text-lg`}
+              >
+                {paragraph}
+              </p>
+            ))}
+          </div>
+        </div>
+      ))}
     </section>
   );
 }
@@ -126,8 +124,7 @@ export default function AboutPage() {
         </p>
       </section>
 
-      <PersonSection eyebrow="Meet the founder" person={about.founder} />
-      <PersonSection eyebrow="Meet the team" person={about.teamMember} />
+      <FoundersSection people={[about.founder, about.coFounder]} />
 
       <section className="mt-10 rounded-xl bg-navy-mid p-6 ring-1 ring-white/10 sm:p-8">
         <p className="font-heading text-xs tracking-[0.28em] text-gold uppercase">

@@ -1,0 +1,6 @@
+PR-branch export (head built from this branch's source) vs published GitHub Pages tree
+(GrokBot-BTC/grokbot-btc.github.io @ 20e7630), 144 files each, build ID normalized (EQ9grVKjQ8nC-tUOmhZBU -> BUILDID),
+route index.html copies applied to the PR export: IDENTICAL file for file (diff -rq: no differences besides an empty _next/<buildId> directory).
+tree sha256 (sorted per-file sha256 list): pr  dc6140897ab8700579443e47b70771c285ff388183fc0d783510474976e5727d
+tree sha256 (sorted per-file sha256 list): pub dc6140897ab8700579443e47b70771c285ff388183fc0d783510474976e5727d
+Previous published tree 295dc2e vs 20e7630: only About files differ (about.html, about/index.html, about.txt, about/__next._full.txt, about/__next.about.__PAGE__.txt); the one visible text change is "Thais Lira, co-founder" -> "Thais Lira".

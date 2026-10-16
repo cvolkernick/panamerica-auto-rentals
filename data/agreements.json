@@ -1,0 +1,58 @@
+{
+  "disclaimer": "This page is general information about our services, not legal or tax advice. A written agreement confirms terms for any vehicle.",
+  "draftBanner": "DRAFT -- not a live offer. This file is a labeled placement stub until the owner publishes the finalized agreement. It is not legal or tax advice and is not an offer to contract. Do not sign this file.",
+  "documents": [
+    {
+      "slug": "spotlight",
+      "title": "Spotlight agreement",
+      "subtitle": "Self-serve listing rung",
+      "pdfFile": "spotlight-agreement.pdf",
+      "status": "draft",
+      "paragraphs": [
+        "This document is the written Spotlight agreement for Panamerica Auto, LLC (trade name Panamerica Auto Rentals).",
+        "Canonical agreement text is not in this file yet. The owner-final version will replace these pages and this PDF. Until then, nothing here is an offer, a quote, or a contract, and the /plans marketing copy remains general information only.",
+        "When the owner-final document is published, this file is the single source for the Spotlight agreement. Terms will not be duplicated as page copy on /plans.",
+        "To review current terms or place a vehicle, write panamerica.cars@gmail.com."
+      ]
+    },
+    {
+      "slug": "standard-management",
+      "title": "Standard management agreement",
+      "subtitle": "Fleet management 80/20",
+      "pdfFile": "standard-management-agreement.pdf",
+      "status": "draft",
+      "paragraphs": [
+        "This document is the written Standard management agreement for Panamerica Auto, LLC (trade name Panamerica Auto Rentals).",
+        "Canonical agreement text is not in this file yet. The owner-final version will replace these pages and this PDF. Until then, nothing here is an offer, a quote, or a contract, and the /plans marketing copy remains general information only.",
+        "When the owner-final document is published, this file is the single source for the Standard management agreement. Terms will not be duplicated as page copy on /plans.",
+        "To review current terms or place a vehicle, write panamerica.cars@gmail.com."
+      ]
+    },
+    {
+      "slug": "guaranteed-payment",
+      "title": "Guaranteed payment + shared OpEx agreement",
+      "subtitle": "Fleet management 50/50",
+      "pdfFile": "guaranteed-payment-agreement.pdf",
+      "status": "draft",
+      "paragraphs": [
+        "This document is the written Guaranteed payment + shared OpEx agreement for Panamerica Auto, LLC (trade name Panamerica Auto Rentals).",
+        "Canonical agreement text is not in this file yet. The owner-final version will replace these pages and this PDF. Until then, nothing here is an offer, a quote, or a contract, and the /plans marketing copy remains general information only.",
+        "When the owner-final document is published, this file is the single source for the Guaranteed payment + shared OpEx agreement. Terms will not be duplicated as page copy on /plans.",
+        "To review current terms or place a vehicle, write panamerica.cars@gmail.com."
+      ]
+    },
+    {
+      "slug": "owner-exit",
+      "title": "Owner exit agreement",
+      "subtitle": "Fleet management 20/80",
+      "pdfFile": "owner-exit-agreement.pdf",
+      "status": "draft",
+      "paragraphs": [
+        "This document is the written Owner exit agreement for Panamerica Auto, LLC (trade name Panamerica Auto Rentals).",
+        "Canonical agreement text is not in this file yet. The owner-final version will replace these pages and this PDF. Until then, nothing here is an offer, a quote, or a contract, and the /plans marketing copy remains general information only.",
+        "When the owner-final document is published, this file is the single source for the Owner exit agreement. Terms will not be duplicated as page copy on /plans.",
+        "To review current terms or place a vehicle, write panamerica.cars@gmail.com."
+      ]
+    }
+  ]
+}
