@@ -1,0 +1,5 @@
+# Cloudflare Pages headers. Replaces next.config.ts headers(), which
+# `output: "export"` cannot emit.
+/plans/*.pdf
+  Content-Type: application/pdf
+  X-Content-Type-Options: nosniff

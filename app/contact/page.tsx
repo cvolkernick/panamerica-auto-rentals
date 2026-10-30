@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
 
 import { ContactForm } from "@/components/contact-form";
+import { Button } from "@/components/ui/button";
 import { SITE_NAME, socialMetadata } from "@/lib/seo";
 import {
   CONTACT_PHONE_DISPLAY,
   CONTACT_PHONE_TEL,
   getContactEmail,
-  publicListings,
+  introCallUrl,
+  localListings,
   turoGuestUrl,
 } from "@/lib/site";
 
@@ -35,6 +37,22 @@ export default function ContactPage() {
         <h1 className="mt-3 text-4xl font-bold text-white sm:text-5xl">
           Send a note
         </h1>
+        <p className="mt-4 max-w-xl text-base leading-relaxed text-white/70">
+          Prefer a 15-minute intro call? Pick a time — Google Meet is added after
+          you book.
+        </p>
+        <Button
+          asChild
+          className="mt-5 h-11 bg-red px-6 font-heading tracking-[0.18em] text-white uppercase hover:bg-red/90"
+        >
+          <a
+            href={introCallUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Schedule an intro call
+          </a>
+        </Button>
         <div className="mt-8 rounded-xl bg-navy-mid p-5 ring-1 ring-white/10 sm:p-8">
           <ContactForm email={email} />
         </div>
@@ -44,6 +62,18 @@ export default function ContactPage() {
         <p className="mt-3 text-sm leading-relaxed text-white/70">
           Prefer to skip the form?
         </p>
+        <Button
+          asChild
+          className="mt-4 h-11 w-full bg-red px-6 font-heading tracking-[0.18em] text-white uppercase hover:bg-red/90"
+        >
+          <a
+            href={introCallUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Schedule an intro call
+          </a>
+        </Button>
         <a
           href={`tel:${CONTACT_PHONE_TEL}`}
           className="mt-3 block text-gold hover:underline"
@@ -56,21 +86,23 @@ export default function ContactPage() {
         >
           {email}
         </a>
-        <h2 className="mt-8 text-lg font-bold text-white">Find us on</h2>
-        <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
-          {publicListings.map((listing) => (
-            <li key={listing.href}>
+        <p className="mt-6 text-sm leading-relaxed text-white/70">
+          Find us on{" "}
+          {localListings.map((item, index) => (
+            <span key={item.id}>
+              {index > 0 ? " and " : null}
               <a
-                href={listing.href}
+                href={item.href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="font-heading text-sm tracking-[0.16em] text-gold uppercase hover:text-white"
+                className="text-gold hover:underline"
               >
-                {listing.label}
+                {item.label}
               </a>
-            </li>
+            </span>
           ))}
-        </ul>
+          .
+        </p>
         <h2 className="mt-8 text-lg font-bold text-white">Guests</h2>
         <p className="mt-3 text-sm leading-relaxed text-white/70">
           Looking for a car on Turo? Use the public host profile.
