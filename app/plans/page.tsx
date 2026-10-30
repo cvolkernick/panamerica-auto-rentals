@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { PlanAgreementLinks } from "@/components/plan-agreement-links";
 import { PlanHashRedirect } from "@/components/plan-hash-redirect";
 import { Button } from "@/components/ui/button";
+import { planDisclaimer } from "@/lib/agreements";
 import { SITE_NAME, socialMetadata } from "@/lib/seo";
 import {
   getContactEmail,
@@ -31,7 +33,7 @@ export default function PlansPage() {
   const email = getContactEmail();
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-14 sm:px-6 sm:py-20">
+    <div className="mx-auto w-full min-w-0 max-w-3xl px-4 py-14 sm:px-6 sm:py-20">
       <PlanHashRedirect />
       <p className="font-heading text-xs tracking-[0.28em] text-gold uppercase">
         Owner plans
@@ -144,6 +146,8 @@ export default function PlansPage() {
                   </div>
                 ))}
               </dl>
+
+              <PlanAgreementLinks plan={plan} />
             </article>
           </li>
         ))}
@@ -158,7 +162,7 @@ export default function PlansPage() {
         </p>
         <p className="mt-3 text-base leading-relaxed text-white/75">
           Cyber Fleet is a fifth rung we are preparing for peer fleet operators
-          who want a path from a legacy Turo book toward autonomy. It is not a
+          who want a path from a legacy rental-platform book toward autonomy. It is not a
           live offering and there is no checkout.
         </p>
         <Link
@@ -170,8 +174,7 @@ export default function PlansPage() {
       </aside>
 
       <p className="mt-10 text-sm leading-relaxed text-white/55">
-        This page is general information about our services, not legal or tax
-        advice. A written agreement confirms terms for any vehicle.
+        {planDisclaimer}
       </p>
 
       <div className="mt-8 rounded-xl bg-navy-mid p-6 ring-1 ring-white/10 sm:flex sm:items-center sm:justify-between sm:p-8">

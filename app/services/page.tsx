@@ -35,8 +35,12 @@ export default function ServicesPage() {
         Work we actually do
       </h1>
       <p className="mt-5 text-lg leading-relaxed text-white/75">
-        Short descriptions only. No case studies, no invented fleet counts, and
-        no vehicle listings on this site.
+        Short descriptions only. No case studies and no invented fleet counts.
+        Cars we manage are on the{" "}
+        <Link href="/fleet" className="text-gold hover:underline">
+          Fleet
+        </Link>{" "}
+        page.
       </p>
       <div className="mt-10 grid gap-8">
         {services.map((service) => (
