@@ -61,6 +61,10 @@ export const BOOK_DIRECT_ENABLED = true;
 /** Public Wheelbase dealer id (not a secret; it appears in every widget snippet). */
 export const WHEELBASE_DEALER_ID = "5262019";
 
+/** Wheelbase-hosted page for one rental: fallback when the embed can't load. */
+export const wheelbaseBookingUrl = (rentalId: string) =>
+  `https://widget.wheelbasepro.com/?dealer_id=${WHEELBASE_DEALER_ID}&store_type=auto&page=listing-details&rental_id=${rentalId}`;
+
 export type BookingButton =
   | { kind: "direct"; key: "direct"; label: string; rentalId: string; primary: true }
   | { kind: "link"; key: string; label: string; href: string; primary: false };
