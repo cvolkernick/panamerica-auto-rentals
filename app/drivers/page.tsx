@@ -43,8 +43,11 @@ export default function DriversPage() {
       </h1>
       <p className="mt-5 text-lg leading-relaxed text-white/75">
         Drive for rideshare and delivery without buying a car. Panamerica Auto
-        Rentals rents clean, well-maintained vehicles by the week to gig
-        drivers in Fort Myers and Cape Coral.
+        Rentals rents clean, well-maintained vehicles by the day, week, or
+        month to gig drivers in Fort Myers and Cape Coral.
+      </p>
+      <p className="mt-3 text-lg leading-relaxed text-white/75">
+        Longer rentals get better rates.
       </p>
 
       <aside
