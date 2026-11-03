@@ -124,6 +124,20 @@ export const noLockInTeaser = {
   body: "Agreements are month-to-month from day one, with no minimum term. Either party can end with written notice; it takes effect at the end of the calendar month after the month notice is given.",
 } as const;
 
+/**
+ * Fleet-partner commission, month to month.
+ * Distinct from the 80/20 and 50/50 owner splits.
+ */
+export const fleetPartnerCommission = {
+  eyebrow: "Fleet-partner commission",
+  term: "Month to month.",
+  tiers: [
+    "20% for trips under 7 days",
+    "15% for 7-21 days",
+    "10% for trips over 21 days",
+  ],
+} as const;
+
 /** Included on every fleet-management plan. Opportunities stays Coming. */
 export const fleetSpotlightIncluded = {
   heading: "Spotlight included",
@@ -299,12 +313,7 @@ export const fleetPartners = [
     ],
     note: null,
     profileStatus: null,
-    links: [
-      {
-        label: "Turo",
-        href: "https://turo.com/us/en/drivers/27172979",
-      },
-    ],
+    links: [{ label: "rental platforms" }],
   },
   {
     slug: "vivek",
@@ -329,10 +338,7 @@ export const fleetPartners = [
         label: "Website",
         href: "https://safewheelsrentalsswfl.com",
       },
-      {
-        label: "Turo",
-        href: "https://turo.com/us/en/drivers/795431",
-      },
+      { label: "rental platforms" },
     ],
   },
   {
