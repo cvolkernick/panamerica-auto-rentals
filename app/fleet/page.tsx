@@ -16,7 +16,7 @@ import {
 import { SITE_NAME, socialMetadata } from "@/lib/seo";
 
 const description =
-  "Cars you can book on Turo and other platforms — Panamerica-managed in Cape Coral and SafeWheels in Punta Gorda.";
+  "Rent clean, well-maintained cars by the day, week, or month. Panamerica-managed cars are in Cape Coral and SafeWheels cars are in Punta Gorda.";
 
 export const metadata: Metadata = {
   title: "The Fleet",
@@ -48,6 +48,19 @@ export default function FleetPage() {
       <h1 className="mt-3 text-4xl font-bold text-white sm:text-5xl">
         Cars you can book
       </h1>
+      <p className="mt-4 max-w-2xl text-base leading-relaxed text-white/70">
+        Rent a clean, well-maintained car by the day, week, or month. Book
+        direct on this page. Gig and rideshare drivers in Fort Myers and Cape
+        Coral can see{" "}
+        <Link href="/drivers" className="text-gold hover:underline">
+          driver rentals
+        </Link>
+        . Vehicle owners can see{" "}
+        <Link href="/partners" className="text-gold hover:underline">
+          fleet partners
+        </Link>
+        .
+      </p>
 
       <ul className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {fleetVehicles.map((vehicle) => {

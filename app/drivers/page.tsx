@@ -81,6 +81,11 @@ export default function DriversPage() {
         <p className="mt-3 text-base leading-relaxed text-white/75">
           Send us a note through our inquiry form with when you want to start
           and how you plan to drive, and we will follow up with available cars.
+          Own a vehicle instead? See{" "}
+          <Link href="/partners" className="text-gold hover:underline">
+            fleet partners
+          </Link>
+          .
         </p>
         <Button asChild className="mt-6">
           <Link href="/contact">Send an inquiry</Link>

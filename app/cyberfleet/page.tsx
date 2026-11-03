@@ -12,7 +12,7 @@ import {
 import styles from "./cyberfleet.module.css";
 
 const description =
-  "Coming soon. An interest page for peer fleet operators preparing a path from a legacy Turo book toward an autonomous Cybercab network. Not a live offering and not a securities offer.";
+  "Coming soon. An interest page for peer fleet operators preparing a path from a legacy rental-platform book toward an autonomous Cybercab network. Not a live offering and not a securities offer.";
 
 export const metadata: Metadata = {
   title: "Cyber Fleet — Coming soon",
@@ -75,7 +75,7 @@ export default function CyberfleetPage() {
           </p>
           <p className="mt-5 text-lg leading-relaxed text-white/80 sm:text-xl">
             Autonomy is coming for the cars you already run. If you don’t remake
-            your own Turo fleet, someone else will.
+            your own rental-platform fleet, someone else will.
           </p>
           <h1 className="mt-6 text-4xl leading-[0.95] font-bold text-white sm:text-5xl lg:text-6xl">
             Get your fleet ahead of the autonomy curve.
@@ -102,7 +102,7 @@ export default function CyberfleetPage() {
           <p className="mt-4 text-base leading-relaxed text-white/80">
             Steve Jobs put it simply: if you don’t cannibalize yourself, someone
             else will. The same pressure hits every fleet that lives on
-            human-driven Turo today. A Cybercab network will remake guest ops,
+            human-driven rental platforms today. A Cybercab network will remake guest ops,
             utilization, and what “a car in the fleet” even means — and the
             operators who wait for a finished playbook will buy someone else’s.
           </p>
@@ -117,7 +117,7 @@ export default function CyberfleetPage() {
           <p className="mt-4 text-base leading-relaxed text-white/80">
             Cyber Fleet is the fifth rung on the owner ladder, above Owner Exit:
             a transition path for peer fleet operators and managers who want to
-            move a legacy Turo book toward an autonomous Cybercab network when
+            move a legacy rental-platform book toward an autonomous Cybercab network when
             Tesla’s pieces are real. You keep earning on what works today. We
             help you prepare the jump. The economics and Tesla implementation
             details stay Coming until they exist.
@@ -129,10 +129,20 @@ export default function CyberfleetPage() {
             Honest limits
           </p>
           <p className="mt-4 text-base leading-relaxed text-white/80">
-            This is not Tesla. It is not a securities offer, and it is not a
-            live Robotaxi product you can check out. Southwest Florida is not a
-            live Robotaxi metro yet. If you want in on the waitlist / interest
-            list while we build the path, talk to us.
+            The cars we rent today go to individuals and gig drivers in Fort
+            Myers and Cape Coral.{" "}
+            <Link href="/fleet" className="text-gold hover:underline">
+              Book direct
+            </Link>{" "}
+            on the fleet, or see{" "}
+            <Link href="/drivers" className="text-gold hover:underline">
+              driver rentals
+            </Link>
+            . This page is a later path for operators, not the main business.
+            It is not Tesla, not a securities offer, and not a live Robotaxi
+            product you can check out. Southwest Florida is not a live Robotaxi
+            metro yet. If you want in on the waitlist / interest list while we
+            build the path, talk to us.
           </p>
         </section>
 

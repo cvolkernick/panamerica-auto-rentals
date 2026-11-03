@@ -47,6 +47,18 @@ export default function PartnersPage() {
         People we work with
       </h1>
       <p className="mt-4 text-base leading-relaxed text-white/65">
+        Client rentals come first.{" "}
+        <Link href="/fleet" className="text-gold hover:underline">
+          Book direct
+        </Link>{" "}
+        on the fleet, or see{" "}
+        <Link href="/drivers" className="text-gold hover:underline">
+          driver rentals
+        </Link>{" "}
+        for gig and rideshare drivers in Fort Myers and Cape Coral. This page
+        is for vehicle owners and the people we work with.
+      </p>
+      <p className="mt-4 text-base leading-relaxed text-white/65">
         Want a listing of your own?{" "}
         <Link href="/plans#spotlight" className="text-gold hover:underline">
           Spotlight
@@ -57,61 +69,60 @@ export default function PartnersPage() {
 
       <section
         className="mt-10 grid gap-6 sm:grid-cols-2"
-        aria-label="Owner splits and fleet-partner commission"
+        aria-label="Owner splits"
       >
-        <article className="rounded-xl border-l-4 border-red bg-navy-mid p-6 ring-1 ring-white/10 sm:p-8">
-          <span
-            aria-hidden
-            className="mb-4 block h-1 w-12 rounded-full bg-red"
-          />
-          <p className="font-heading text-[0.7rem] tracking-[0.22em] text-white/50 uppercase">
-            Owner splits
-          </p>
-          <h2 className="mt-2 text-2xl font-bold text-white">80/20 and 50/50</h2>
-          <ul className="mt-5 grid gap-3">
-            {ownerSplits.map((plan) => (
-              <li
-                key={plan.slug}
-                className="rounded-lg bg-navy px-4 py-4 ring-1 ring-white/10"
-              >
-                <p className="font-heading text-xl tracking-[0.12em] text-gold uppercase">
-                  {plan.split}
+        {ownerSplits.map((plan) => (
+          <article
+            key={plan.slug}
+            className={cn(
+              "rounded-xl border-l-4 bg-navy-mid p-6 ring-1 ring-white/10 sm:p-8",
+              planAccentBorder[plan.accent]
+            )}
+          >
+            <span
+              aria-hidden
+              className={cn(
+                "mb-4 block h-1 w-12 rounded-full",
+                planAccentBar[plan.accent]
+              )}
+            />
+            <p className="font-heading text-[0.7rem] tracking-[0.22em] text-white/50 uppercase">
+              Owner split
+            </p>
+            <h2 className="mt-2 text-2xl font-bold text-white">{plan.split}</h2>
+            <p className="mt-2 font-heading text-sm tracking-[0.12em] text-white uppercase">
+              <Link href={`/plans#${plan.slug}`} className="hover:text-gold">
+                {plan.title}
+              </Link>
+            </p>
+            <p className="mt-2 text-sm leading-relaxed text-white/70">
+              Owner {plan.ownerShare} / company {plan.companyShare}
+            </p>
+            {plan.slug === fleetPartnerCommission.planSlug ? (
+              <div className="mt-6 border-t border-white/10 pt-6">
+                <p className="font-heading text-[0.7rem] tracking-[0.22em] text-gold uppercase">
+                  Month to month
                 </p>
-                <p className="mt-2 font-heading text-sm tracking-[0.12em] text-white uppercase">
-                  <Link href={`/plans#${plan.slug}`} className="hover:text-gold">
-                    {plan.title}
-                  </Link>
+                <h3 className="mt-2 text-xl font-bold text-white">
+                  {fleetPartnerCommission.eyebrow}
+                </h3>
+                <ul className="mt-5 grid gap-3">
+                  {fleetPartnerCommission.tiers.map((tier) => (
+                    <li
+                      key={tier}
+                      className="rounded-lg bg-navy px-4 py-4 text-sm leading-relaxed text-white/80 ring-1 ring-white/10"
+                    >
+                      {tier}
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-4 text-sm leading-relaxed text-white/75">
+                  {fleetPartnerCommission.scope}
                 </p>
-                <p className="mt-2 text-sm leading-relaxed text-white/70">
-                  Owner {plan.ownerShare} / company {plan.companyShare}
-                </p>
-              </li>
-            ))}
-          </ul>
-        </article>
-
-        <article className="rounded-xl border-l-4 border-gold bg-navy-mid p-6 ring-1 ring-white/10 sm:p-8">
-          <span
-            aria-hidden
-            className="mb-4 block h-1 w-12 rounded-full bg-gold"
-          />
-          <p className="font-heading text-[0.7rem] tracking-[0.22em] text-gold uppercase">
-            Month to month
-          </p>
-          <h2 className="mt-2 text-2xl font-bold text-white">
-            {fleetPartnerCommission.eyebrow}
-          </h2>
-          <ul className="mt-5 grid gap-3">
-            {fleetPartnerCommission.tiers.map((tier) => (
-              <li
-                key={tier}
-                className="rounded-lg bg-navy px-4 py-4 text-sm leading-relaxed text-white/80 ring-1 ring-white/10"
-              >
-                {tier}
-              </li>
-            ))}
-          </ul>
-        </article>
+              </div>
+            ) : null}
+          </article>
+        ))}
       </section>
 
       <ul className="mt-10 grid gap-6">

@@ -18,7 +18,7 @@ import {
 import { cn } from "@/lib/utils";
 
 const description =
-  "Owner plans from Panamerica Auto, LLC — Spotlight self-serve listing, then fleet management: 80/20 standard, 50/50 guaranteed payment, and 20/80 owner exit.";
+  "Owner plans beside client rentals in Fort Myers and Cape Coral — Spotlight self-serve listing, then 80/20 standard, 50/50 guaranteed payment, and 20/80 owner exit.";
 
 export const metadata: Metadata = {
   title: "Owner plans",
@@ -43,13 +43,29 @@ export default function PlansPage() {
         A ladder, not a menu
       </h1>
       <p className="mt-5 text-lg leading-relaxed text-white/75">
-        Four rungs, in order: start with Spotlight if you still handle
-        day-to-day yourself. Step into fleet management when you want us on
-        operations — 80/20 standard, then 50/50 with a payment guarantee, then
-        Owner exit. Splits on fleet-management rungs are owner% / company%.
+        Renting a car comes first.{" "}
+        <Link href="/fleet" className="text-gold hover:underline">
+          Book direct
+        </Link>{" "}
+        on the fleet, or see{" "}
+        <Link href="/drivers" className="text-gold hover:underline">
+          driver rentals
+        </Link>{" "}
+        for gig and rideshare drivers in Fort Myers and Cape Coral. The ladder
+        below is for vehicle owners.{" "}
+        <Link href="/partners" className="text-gold hover:underline">
+          Fleet partners
+        </Link>{" "}
+        lists who we work with.
+      </p>
+      <p className="mt-4 text-lg leading-relaxed text-white/75">
+        Four rungs, in order: start with Spotlight if you still run day-to-day
+        yourself. The later rungs are for owners who want us on operations —
+        80/20 standard, then 50/50 with a payment guarantee, then Owner exit.
+        Splits on those rungs are owner% / company%.
       </p>
       <p className="mt-4 text-base leading-relaxed text-white/65">
-        These are operations and fleet-management services — not an investment,
+        These owner plans are operations services — not an investment,
         security, or offer to sell a security.
       </p>
 
@@ -148,42 +164,44 @@ export default function PlansPage() {
                 ))}
               </dl>
 
+              {plan.slug === fleetPartnerCommission.planSlug ? (
+                <div
+                  className="mt-6 border-t border-white/10 pt-6"
+                  id="fleet-partner-commission"
+                >
+                  <h3 className="text-xl font-bold text-white">
+                    {fleetPartnerCommission.eyebrow}
+                  </h3>
+                  <ul className="mt-4 grid gap-2">
+                    {fleetPartnerCommission.tiers.map((tier) => (
+                      <li
+                        key={tier}
+                        className="text-base leading-relaxed text-white/80"
+                      >
+                        {tier}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-3 text-base leading-relaxed text-white/75">
+                    {fleetPartnerCommission.scope}
+                  </p>
+                  <p className="mt-3 text-base leading-relaxed text-white/75">
+                    {fleetPartnerCommission.term}
+                  </p>
+                  <Link
+                    href="/partners"
+                    className="mt-4 inline-block font-heading text-sm tracking-[0.16em] text-gold uppercase hover:underline"
+                  >
+                    Fleet partners
+                  </Link>
+                </div>
+              ) : null}
+
               <PlanAgreementLinks plan={plan} />
             </article>
           </li>
         ))}
       </ol>
-
-      <section
-        className="mt-10 rounded-xl border border-white/10 bg-navy-mid/70 px-6 py-5 ring-1 ring-white/10 sm:px-8"
-        aria-labelledby="fleet-partner-commission"
-      >
-        <p className="font-heading text-[0.7rem] tracking-[0.22em] text-gold uppercase">
-          Fleet partners
-        </p>
-        <h2
-          id="fleet-partner-commission"
-          className="mt-3 text-2xl font-bold text-white"
-        >
-          {fleetPartnerCommission.eyebrow}
-        </h2>
-        <ul className="mt-4 grid gap-2">
-          {fleetPartnerCommission.tiers.map((tier) => (
-            <li key={tier} className="text-base leading-relaxed text-white/80">
-              {tier}
-            </li>
-          ))}
-        </ul>
-        <p className="mt-3 text-base leading-relaxed text-white/75">
-          {fleetPartnerCommission.term}
-        </p>
-        <Link
-          href="/partners"
-          className="mt-4 inline-block font-heading text-sm tracking-[0.16em] text-gold uppercase hover:underline"
-        >
-          Fleet partners
-        </Link>
-      </section>
 
       <aside
         className="mt-10 rounded-xl border border-white/10 bg-navy-mid/70 px-6 py-5 ring-1 ring-white/10 sm:px-8"

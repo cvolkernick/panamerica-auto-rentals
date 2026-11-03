@@ -1,6 +1,6 @@
 # Panamerica Auto Rentals
 
-Public marketing site for **Panamerica Auto Rentals**, the trade name of **Panamerica Auto, LLC** — a Florida LLC doing fleet management and automotive logistics, with a focus on assets on Turo and other rideshare platforms.
+Public marketing site for **Panamerica Auto Rentals**, the trade name of **Panamerica Auto, LLC** — a Florida LLC that rents vehicles by the day, week, or month to individuals and gig drivers in Fort Myers and Cape Coral, with fleet partner programs for vehicle owners.
 
 Dark-mode Next.js App Router site. No booking engine, payments, or auth.
 
@@ -20,11 +20,11 @@ npm start
 
 ## Pages
 
-- `/` — hero (logo + brand), one-liner, three service tiles, owner-plan ladder tiles (no-lock-in teaser on the ladder), contact CTA; **Our Fleet** goes to `/fleet`
-- `/fleet` — 13 cards (4 Panamerica-managed in Cape Coral + 9 SafeWheels in Punta Gorda): photo, name, location/partner label, Book on Turo. Data: `data/fleet.ts` + `public/fleet/`
-- `/services` — fleet management, platform ops (Turo & rideshare), automotive logistics
+- `/` — hero (logo + brand), rental-first one-liner, three service tiles (rentals, gig driver rentals, fleet partners), owner-plan ladder tiles (no-lock-in teaser on the ladder); hero actions are Book Direct (`/fleet`), driver rentals (`/drivers`), and fleet partners (`/partners`)
+- `/fleet` — 13 cards (4 Panamerica-managed in Cape Coral + 9 SafeWheels in Punta Gorda): photo, name, location/partner label, Book on a rental platform. Data: `data/fleet.ts` + `public/fleet/`
+- `/services` — rentals (Book Direct on /fleet), gig driver rentals (/drivers), and fleet partners for vehicle owners (/partners)
 - `/plans` — owner service ladder: Spotlight (self-serve $10 / $15 / $25 Coming), then fleet management 80/20, 50/50 guaranteed payment, and 20/80 owner exit (month-to-month from day one teaser; fleet rungs include Spotlight listing + insights). Each rung links to its agreement (`/plans/<slug>`) with a PDF download and to the shared Exhibit A (Vehicle Schedule) PDF. Viewer text lives in `data/agreements.json`; the agreement PDFs in `public/plans/*-agreement.pdf` are owner-supplied; do not hard-code terms into page copy.
-- `/partners` — curated Fleet partners (no Turo scrape)
+- `/partners` — curated Fleet partners (no rental-platform scrape)
 - `/about` — company description, Fleet partners teaser, and Sunbiz legal facts for Panamerica Auto, LLC
 - `/contact` — name / email / message; **Send** opens `mailto:`; **Schedule an intro call** opens the Google Calendar booking page in a new tab. Under the phone and email: **Find us on** Google and Facebook (same URLs as the footer). Yelp is omitted until a public URL exists. These listings are not in the primary nav.
 

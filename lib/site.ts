@@ -34,19 +34,17 @@ export const legal = {
     "https://search.sunbiz.org/Inquiry/corporationsearch/SearchResults?inquiryType=EntityName&searchTerm=PANAMERICA+AUTO",
 } as const;
 
-export const turoGuestUrl = "https://turo.com/us/en/drivers/27172979";
-
 /** 15-minute intro call (Google Calendar appointment schedule, organizer Panamerica). */
 export const introCallUrl = "https://calendar.app.google/Kpfn3aeKQ2VvZyeQ6";
 
 export const positioning =
-  "Fleet management and automotive logistics, specializing in management of assets on Turo and other rideshare platforms.";
+  "We rent clean, well-maintained vehicles by the day, week, or month to individuals and to gig and rideshare drivers in Fort Myers and Cape Coral. Fleet partner programs for vehicle owners are also available.";
 
 export const about = {
   title: "Who we are",
   paragraphs: [
-    "We are a small, highly capable team of well-established fleet management experts specializing in all aspects of fleet operations, customer service, logistics, and management. We specialize in everything from day-to-day cleanings and operations to guest communications, vehicle maintenance and upkeep, and site delivery.",
-    "We have over a decade of combined experience with fleets of all sizes, ranging from a few vehicles to aggregate fleets of over 100. We have experience across a diverse set of Southeastern markets, including Orlando, Jacksonville, Tampa, St. Pete, Fort Myers, Cape Coral, and Punta Gorda.",
+    "We rent clean, well-maintained vehicles by the day, week, or month to individuals and to gig and rideshare drivers in Fort Myers and Cape Coral. The team handles cleaning, guest communication, maintenance, and delivery so the car is ready when you are.",
+    "Fleet partner programs for vehicle owners sit beside that work. We have over a decade of combined experience with fleets of all sizes, from a few vehicles to more than 100, across Orlando, Jacksonville, Tampa, St. Pete, Fort Myers, Cape Coral, and Punta Gorda.",
   ],
   markets: [
     "Orlando",
@@ -60,47 +58,52 @@ export const about = {
   founder: {
     name: "Chris Volkernick",
     bio: [
-      "I started in vehicle rentals around 2020. I had run Airbnb properties, and through that I found Turo, which I saw as the car version of Airbnb. I listed one of my own cars with a co-host fleet manager, then went to work for that company on their other cars. Over time I bought my own cars to rotate into their fleet and grew with them as they expanded across several locations. I eventually ran one location on my own with roughly 40 to 50 cars, and at the peak I worked with somewhere between 100 and 150 cars. Along the way I managed cars in Orlando, Jacksonville, Tampa, St. Petersburg, the Fort Myers and Cape Coral area, and Punta Gorda.",
+      "I started in vehicle rentals around 2020. I had run Airbnb properties, and through that I found a popular rental platform, which I saw as the car version of Airbnb. I listed one of my own cars with a co-host fleet manager, then went to work for that company on their other cars. Over time I bought my own cars to rotate into their fleet and grew with them as they expanded across several locations. I eventually ran one location on my own with roughly 40 to 50 cars, and at the peak I worked with somewhere between 100 and 150 cars. Along the way I managed cars in Orlando, Jacksonville, Tampa, St. Petersburg, the Fort Myers and Cape Coral area, and Punta Gorda.",
       "I then started working for myself, running my own cars and taking on cars from other owners through Panamerica Auto, LLC. I stay hands-on in all of it: pricing, guest messages, maintenance, cleaning, scheduling, tolls, insurance, and buying vehicles.",
-      "Turo was my first work in the car business, and I learned it by doing it. I also hold a computer science degree and have a software development background in web and mobile apps. I'm also experimenting with AI and automation solutions in the business, and I'm exploring branching out into the autonomous vehicle market as it emerges, including the Cybercab.",
+      "Rental platforms were my first work in the car business, and I learned them by doing it. I also hold a computer science degree and have a software development background in web and mobile apps. I'm also experimenting with AI and automation solutions in the business, and I'm exploring branching out into the autonomous vehicle market as it emerges, including the Cybercab.",
     ],
   },
   authorizedMember: {
     name: "Thais Lira",
     bio: [
-      "I bring more than three years of experience in customer service and business administration to Panamerica Auto Rentals. I manage and coordinate all aspects of our fleet management, and I provide virtual support to guests and to our team. I've also overseen customer service teams, so I know what it takes to keep service consistent, responsive, and friendly. I'm currently specializing in international relations and governance studies, which helps me with cross-border coordination, international client and vendor relations, and multilingual support. I enjoy making the rental experience simple for guests and dependable for the owners we work with.",
+      "I bring more than three years of experience in customer service and business administration to Panamerica Auto Rentals. I manage and coordinate our client rentals and our work with vehicle owners, and I provide virtual support to guests and to our team. I've also overseen customer service teams, so I know what it takes to keep service consistent, responsive, and friendly. I'm currently specializing in international relations and governance studies, which helps me with cross-border coordination, international client and vendor relations, and multilingual support. I enjoy making the rental experience simple for guests and dependable for the owners we work with.",
     ],
   },
 } as const;
 
 export const services = [
   {
-    slug: "fleet-management",
-    title: "Fleet management",
+    slug: "rentals",
+    title: "Rentals",
     accent: "red" as const,
+    href: "/fleet",
+    linkLabel: "Book Direct",
     summary:
-      "Oversight of vehicle assets placed on Turo and other rideshare platforms — readiness, turnover, and day-to-day care.",
+      "Clean, well-maintained vehicles by the day, week, or month for individuals in Fort Myers and Cape Coral.",
     description:
-      "We manage vehicle assets so they stay available and in working order for platform use. That covers coordination of upkeep, turnover between trips, and the operational details owners should not have to chase themselves. We do not publish fleet size, utilization rates, or vehicle inventories.",
+      "Rent a clean, well-maintained vehicle by the day, week, or month. Individuals in Fort Myers and Cape Coral can book direct from the fleet.",
   },
   {
-    slug: "platform-ops",
-    title: "Platform ops",
-    eyebrow: "Turo & rideshare",
+    slug: "gig-driver-rentals",
+    title: "Gig driver rentals",
     accent: "blue" as const,
+    href: "/drivers",
+    linkLabel: "Driver rentals",
     summary:
-      "Hands-on operations for assets listed on Turo and other rideshare platforms — listings, guest-facing workflow, and platform process.",
+      "Cars for gig and rideshare drivers in Fort Myers and Cape Coral, by the day, week, or month.",
     description:
-      "Platform work is the daily rhythm of keeping listings current and handling the operational side of Turo and similar rideshare marketplaces. Managed cars are on the Fleet page with a Turo booking link. This site does not scrape Turo and does not publish prices, plates, or VINs.",
+      "Gig and rideshare drivers in Fort Myers and Cape Coral can rent a clean, well-maintained vehicle by the day, week, or month. Longer rentals get better rates.",
   },
   {
-    slug: "automotive-logistics",
-    title: "Automotive logistics",
+    slug: "fleet-partners",
+    title: "Fleet partners",
+    eyebrow: "For vehicle owners",
     accent: "green" as const,
-    summary:
-      "Movement and coordination of vehicles between service, storage, and platform readiness.",
+    href: "/partners",
+    linkLabel: "Fleet partners",
+    summary: "Fleet management and partner programs for vehicle owners.",
     description:
-      "Logistics is the physical side: getting a vehicle where it needs to be, when it needs to be there, so it can go back on platform or into service. We keep that description honest — no invented lanes, warehouses, or nationwide office map.",
+      "Vehicle owners can place a car in fleet management or a partner program. We look after readiness and turnover, listings on rental platforms, and getting a vehicle between service and the next trip. We do not publish fleet size, utilization rates, or vehicle inventories, and this site does not scrape rental platforms or publish prices, plates, or VINs.",
   },
 ] as const;
 
@@ -125,12 +128,14 @@ export const noLockInTeaser = {
 } as const;
 
 /**
- * Fleet-partner commission, month to month.
- * Distinct from the 80/20 and 50/50 owner splits.
+ * Commission tiers for the standard management plan (80/20) only.
+ * Month to month. Not part of guaranteed payment (50/50) or owner exit.
  */
 export const fleetPartnerCommission = {
+  planSlug: "standard-management",
   eyebrow: "Fleet-partner commission",
   term: "Month to month.",
+  scope: "Commission tiers apply to the standard management plan only.",
   tiers: [
     "20% for trips under 7 days",
     "15% for 7-21 days",
@@ -391,6 +396,7 @@ export function localBusinessJsonLd(email: string) {
     "@context": "https://schema.org",
     "@type": ["Organization", "LocalBusiness"],
     name: legal.entityName,
+    description: positioning,
     telephone: CONTACT_PHONE_TEL,
     email,
     url: PUBLIC_WEB_URL,

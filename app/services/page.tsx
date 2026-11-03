@@ -3,11 +3,11 @@ import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import { SITE_NAME, socialMetadata } from "@/lib/seo";
-import { services, turoGuestUrl } from "@/lib/site";
+import { services } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
 const description =
-  "Fleet management, Turo and rideshare platform operations, and automotive logistics from Panamerica Auto, LLC.";
+  "Vehicle rentals by the day, week, or month for individuals and gig drivers in Fort Myers and Cape Coral, plus fleet partner programs for owners.";
 
 export const metadata: Metadata = {
   title: "Services",
@@ -35,12 +35,21 @@ export default function ServicesPage() {
         Work we actually do
       </h1>
       <p className="mt-5 text-lg leading-relaxed text-white/75">
-        Short descriptions only. No case studies and no invented fleet counts.
-        Cars we manage are on the{" "}
+        We rent clean, well-maintained vehicles by the day, week, or month to
+        individuals and to gig and rideshare drivers in Fort Myers and Cape
+        Coral.{" "}
         <Link href="/fleet" className="text-gold hover:underline">
-          Fleet
+          Book Direct
         </Link>{" "}
-        page.
+        on the fleet, or see{" "}
+        <Link href="/drivers" className="text-gold hover:underline">
+          driver rentals
+        </Link>
+        . Fleet management and partner programs for vehicle owners are on{" "}
+        <Link href="/partners" className="text-gold hover:underline">
+          fleet partners
+        </Link>
+        .
       </p>
       <div className="mt-10 grid gap-8">
         {services.map((service) => (
@@ -61,13 +70,31 @@ export default function ServicesPage() {
             <p className="mt-4 text-base leading-relaxed text-white/75">
               {service.description}
             </p>
+            <Link
+              href={service.href}
+              className="mt-4 inline-block font-heading text-sm tracking-[0.16em] text-gold uppercase hover:text-white"
+            >
+              {service.linkLabel}
+            </Link>
           </article>
         ))}
       </div>
       <p className="mt-10 text-base leading-relaxed text-white/70">
-        Placing a vehicle with us? See the{" "}
+        Renting a car?{" "}
+        <Link href="/fleet" className="text-gold hover:underline">
+          Book direct
+        </Link>{" "}
+        on the fleet, or see{" "}
+        <Link href="/drivers" className="text-gold hover:underline">
+          driver rentals
+        </Link>
+        . Placing a vehicle with us? See the{" "}
         <Link href="/plans" className="text-gold hover:underline">
-          owner management plans
+          owner plans
+        </Link>{" "}
+        and{" "}
+        <Link href="/partners" className="text-gold hover:underline">
+          fleet partners
         </Link>
         .
       </p>
@@ -90,9 +117,7 @@ export default function ServicesPage() {
           variant="outline"
           className="h-11 border-white/20 bg-transparent px-5 font-heading tracking-[0.16em] text-white uppercase hover:bg-white/10"
         >
-          <a href={turoGuestUrl} rel="noopener noreferrer">
-            Turo
-          </a>
+          <Link href="/fleet">Book Direct</Link>
         </Button>
       </div>
     </div>
