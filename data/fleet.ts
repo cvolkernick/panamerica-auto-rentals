@@ -71,7 +71,7 @@ export type BookingButton =
 
 /**
  * The only place that decides which buttons a car gets, and in what order:
- * Book Direct (primary) → Turo → Mobi → Upcar → Ride → others.
+ * Book Direct (primary) → rental platform → Mobi → Upcar → Ride → others.
  * Unlisted cars get none.
  */
 export function bookingButtons(vehicle: Pick<FleetVehicle, "listed" | "links">): BookingButton[] {
@@ -88,7 +88,7 @@ export function bookingButtons(vehicle: Pick<FleetVehicle, "listed" | "links">):
     });
   }
   const platforms: [string, string, string | undefined][] = [
-    ["turo", "Book on Turo", turo],
+    ["platform", "Book on a rental platform", turo],
     ["mobi", "Book on Mobi", mobi],
     ["upcar", "Book on Upcar", upcar],
     ["ride", "Book on Ride", ride],

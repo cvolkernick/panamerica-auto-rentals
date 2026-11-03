@@ -57,21 +57,21 @@ export default function HomePage() {
                 asChild
                 className="h-12 bg-red px-6 font-heading tracking-[0.18em] text-white uppercase hover:bg-red/90"
               >
-                <Link href="/contact">Get in touch</Link>
+                <Link href="/fleet">Book Direct</Link>
               </Button>
               <Button
                 asChild
                 variant="outline"
                 className="h-12 border-white/20 bg-transparent px-6 font-heading tracking-[0.18em] text-white uppercase hover:bg-white/10"
               >
-                <Link href="/plans">Owner plans</Link>
+                <Link href="/drivers">Driver rentals</Link>
               </Button>
               <Button
                 asChild
                 variant="outline"
                 className="h-12 border-white/20 bg-transparent px-6 font-heading tracking-[0.18em] text-white uppercase hover:bg-white/10"
               >
-                <Link href="/fleet">Our Fleet</Link>
+                <Link href="/partners">Fleet partners</Link>
               </Button>
             </div>
           </div>
@@ -85,7 +85,7 @@ export default function HomePage() {
               What we do
             </p>
             <h2 className="mt-2 text-3xl font-bold text-white sm:text-4xl">
-              Three lines of work
+              By the day, week, or month
             </h2>
           </div>
           <Link
@@ -116,6 +116,12 @@ export default function HomePage() {
                 </CardTitle>
                 <CardDescription className="text-base leading-relaxed text-white/70">
                   {service.summary}
+                  <Link
+                    href={service.href}
+                    className="mt-3 block font-heading text-sm tracking-[0.16em] text-gold uppercase hover:text-white"
+                  >
+                    {service.linkLabel}
+                  </Link>
                 </CardDescription>
               </CardHeader>
             </Card>
@@ -123,7 +129,7 @@ export default function HomePage() {
         </div>
         <div className="mt-10 rounded-xl bg-navy-mid p-6 ring-1 ring-white/10 sm:flex sm:items-center sm:justify-between sm:p-8">
           <p className="max-w-xl text-base leading-relaxed text-white/80">
-            Need fleet, platform, or logistics help? Write us.
+            Need a rental, or want to place a car with us? Write us.
           </p>
           <Button
             asChild
@@ -142,12 +148,24 @@ export default function HomePage() {
                 Owner plans
               </p>
               <h2 className="mt-2 text-3xl font-bold text-white sm:text-4xl">
-                From self-serve to fleet management
+                For owners, from a listing to a managed car
               </h2>
               <p className="mt-3 max-w-2xl text-base leading-relaxed text-white/70">
-                Spotlight is the entry rung: you still run day-to-day yourself.
-                80/20, 50/50, and Owner exit are fleet management — clear who
-                pays what, and what share you keep.
+                These plans are for vehicle owners. To rent a car,{" "}
+                <Link href="/fleet" className="text-gold hover:underline">
+                  book direct
+                </Link>{" "}
+                on the fleet or see{" "}
+                <Link href="/drivers" className="text-gold hover:underline">
+                  driver rentals
+                </Link>
+                . Spotlight is the entry rung for owners: you still run
+                day-to-day yourself. 80/20, 50/50, and Owner exit are the
+                management rungs — clear who pays what, and what share you keep.{" "}
+                <Link href="/partners" className="text-gold hover:underline">
+                  Fleet partners
+                </Link>{" "}
+                lists who we work with.
               </p>
               <p className="mt-3 max-w-2xl text-base leading-relaxed text-gold/90">
                 {noLockInTeaser.body}

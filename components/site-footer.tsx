@@ -22,8 +22,12 @@ export function SiteFooter() {
               Panamerica Auto Rentals
             </p>
             <p className="mt-2 max-w-md text-sm leading-relaxed text-white/65">
-              {legal.entityName} — fleet management and automotive logistics
-              for assets on rental platforms and other rideshare platforms.
+              {legal.entityName} rents clean, well-maintained vehicles by the
+              day, week, or month in Fort Myers and Cape Coral.{" "}
+              <Link href="/partners" className="text-gold hover:underline">
+                Fleet partners
+              </Link>{" "}
+              is for vehicle owners.
             </p>
           </div>
           <nav aria-label="Footer">

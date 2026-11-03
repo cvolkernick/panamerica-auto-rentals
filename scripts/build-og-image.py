@@ -19,9 +19,9 @@ RED = (225, 29, 46)
 
 WIDTH, HEIGHT = 1200, 630
 TAGLINE = (
-    "Fleet management and automotive logistics, "
-    "specializing in management of assets on Turo "
-    "and other rideshare platforms."
+    "We rent clean, well-maintained vehicles by the day, week, or month "
+    "to individuals and to gig and rideshare drivers in Fort Myers and Cape Coral. "
+    "Fleet partner programs for vehicle owners are also available."
 )
 
 

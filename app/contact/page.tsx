@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { ContactForm } from "@/components/contact-form";
 import { Button } from "@/components/ui/button";
@@ -9,11 +10,10 @@ import {
   getContactEmail,
   introCallUrl,
   localListings,
-  turoGuestUrl,
 } from "@/lib/site";
 
 const description =
-  "Write Panamerica Auto Rentals. Messages open in your mail app.";
+  "Rent a car in Fort Myers or Cape Coral, or ask about a fleet partner plan. Messages open in your mail app.";
 
 export const metadata: Metadata = {
   title: "Contact",
@@ -38,8 +38,20 @@ export default function ContactPage() {
           Send a note
         </h1>
         <p className="mt-4 max-w-xl text-base leading-relaxed text-white/70">
-          Prefer a 15-minute intro call? Pick a time — Google Meet is added after
-          you book.
+          Renting a car in Fort Myers or Cape Coral?{" "}
+          <Link href="/fleet" className="text-gold hover:underline">
+            Book direct
+          </Link>{" "}
+          on the fleet, or see{" "}
+          <Link href="/drivers" className="text-gold hover:underline">
+            driver rentals
+          </Link>
+          . Vehicle owners can see{" "}
+          <Link href="/partners" className="text-gold hover:underline">
+            fleet partners
+          </Link>
+          . Prefer a 15-minute intro call? Pick a time — Google Meet is added
+          after you book.
         </p>
         <Button
           asChild
@@ -105,15 +117,23 @@ export default function ContactPage() {
         </p>
         <h2 className="mt-8 text-lg font-bold text-white">Guests</h2>
         <p className="mt-3 text-sm leading-relaxed text-white/70">
-          Looking for a car on Turo? Use the public host profile.
+          Looking for a car? Book direct on the fleet, or see driver rentals
+          for gig and rideshare work.
         </p>
-        <a
-          href={turoGuestUrl}
-          rel="noopener noreferrer"
-          className="mt-3 inline-block font-heading text-sm tracking-[0.16em] text-white uppercase hover:text-gold"
-        >
-          Turo
-        </a>
+        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
+          <Link
+            href="/fleet"
+            className="font-heading text-sm tracking-[0.16em] text-white uppercase hover:text-gold"
+          >
+            Book Direct
+          </Link>
+          <Link
+            href="/drivers"
+            className="font-heading text-sm tracking-[0.16em] text-white uppercase hover:text-gold"
+          >
+            Driver rentals
+          </Link>
+        </div>
       </aside>
     </div>
   );

@@ -6,7 +6,7 @@ import { SITE_NAME, socialMetadata } from "@/lib/seo";
 import { about, formatNameList, getContactEmail, legal } from "@/lib/site";
 
 const description =
-  "A small, highly capable fleet management team with over a decade of combined experience across Southeastern markets — Panamerica Auto Rentals, the trade name of Panamerica Auto, LLC.";
+  "Panamerica Auto Rentals rents clean, well-maintained vehicles by the day, week, or month in Fort Myers and Cape Coral, with fleet partner programs for vehicle owners.";
 
 export const metadata: Metadata = {
   title: "About",
@@ -108,8 +108,8 @@ export default function AboutPage() {
           Fleet partners
         </p>
         <p className="mt-3 text-base leading-relaxed text-white/80">
-          Meet some of our fleet partners — hosts and operators we work with on
-          Turo and related work.
+          Fleet partners are for vehicle owners. Meet the hosts and operators we
+          work with.
         </p>
         <Link
           href="/partners"
@@ -156,7 +156,7 @@ export default function AboutPage() {
 
       <div className="mt-10 rounded-xl bg-navy-mid p-6 ring-1 ring-white/10 sm:flex sm:items-center sm:justify-between sm:p-8">
         <p className="max-w-xl text-base leading-relaxed text-white/80">
-          Want to talk about fleet operations or an owner plan? Write us at{" "}
+          Renting a car, or placing one with us? Write us at{" "}
           <a href={`mailto:${email}`} className="text-gold hover:underline">
             {email}
           </a>
