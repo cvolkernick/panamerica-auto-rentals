@@ -88,7 +88,7 @@ export function bookingButtons(vehicle: Pick<FleetVehicle, "listed" | "links">):
     });
   }
   const platforms: [string, string, string | undefined][] = [
-    ["platform", "Book on a rental platform", turo],
+    ["platform", "Book on Turo", turo],
     ["mobi", "Book on Mobi", mobi],
     ["upcar", "Book on Upcar", upcar],
     ["ride", "Book on Ride", ride],
