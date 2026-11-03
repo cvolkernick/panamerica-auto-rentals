@@ -23,7 +23,7 @@ export function SiteFooter() {
             </p>
             <p className="mt-2 max-w-md text-sm leading-relaxed text-white/65">
               {legal.entityName} — fleet management and automotive logistics
-              for assets on Turo and other rideshare platforms.
+              for assets on rental platforms and other rideshare platforms.
             </p>
           </div>
           <nav aria-label="Footer">

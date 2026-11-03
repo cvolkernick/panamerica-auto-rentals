@@ -8,6 +8,7 @@ const PUBLIC_PATHS = [
   "/about",
   "/contact",
   "/cyberfleet",
+  "/drivers",
   "/fleet",
   "/partners",
   "/plans",

@@ -357,6 +357,7 @@ export const nav = [
   { href: "/fleet", label: "Fleet" },
   { href: "/services", label: "Services" },
   { href: "/plans", label: "Plans" },
+  { href: "/drivers", label: "Drivers" },
   { href: "/partners", label: "Partners" },
   { href: "/about", label: "About" },
   { href: "/contact", label: "Contact" },
