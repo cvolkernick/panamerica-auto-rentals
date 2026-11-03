@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { planDisclaimer } from "@/lib/agreements";
 import { SITE_NAME, socialMetadata } from "@/lib/seo";
 import {
+  fleetPartnerCommission,
   getContactEmail,
   isSelfServePlan,
   noLockInTeaser,
@@ -152,6 +153,37 @@ export default function PlansPage() {
           </li>
         ))}
       </ol>
+
+      <section
+        className="mt-10 rounded-xl border border-white/10 bg-navy-mid/70 px-6 py-5 ring-1 ring-white/10 sm:px-8"
+        aria-labelledby="fleet-partner-commission"
+      >
+        <p className="font-heading text-[0.7rem] tracking-[0.22em] text-gold uppercase">
+          Fleet partners
+        </p>
+        <h2
+          id="fleet-partner-commission"
+          className="mt-3 text-2xl font-bold text-white"
+        >
+          {fleetPartnerCommission.eyebrow}
+        </h2>
+        <ul className="mt-4 grid gap-2">
+          {fleetPartnerCommission.tiers.map((tier) => (
+            <li key={tier} className="text-base leading-relaxed text-white/80">
+              {tier}
+            </li>
+          ))}
+        </ul>
+        <p className="mt-3 text-base leading-relaxed text-white/75">
+          {fleetPartnerCommission.term}
+        </p>
+        <Link
+          href="/partners"
+          className="mt-4 inline-block font-heading text-sm tracking-[0.16em] text-gold uppercase hover:underline"
+        >
+          Fleet partners
+        </Link>
+      </section>
 
       <aside
         className="mt-10 rounded-xl border border-white/10 bg-navy-mid/70 px-6 py-5 ring-1 ring-white/10 sm:px-8"
