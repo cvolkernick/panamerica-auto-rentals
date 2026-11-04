@@ -6,8 +6,6 @@ import { SITE_NAME, socialMetadata } from "@/lib/seo";
 import {
   fleetPartnerCommission,
   fleetPartners,
-  isFleetManagementPlan,
-  ownerPlans,
   planAccentBar,
   planAccentBorder,
 } from "@/lib/site";
@@ -25,17 +23,6 @@ export const metadata: Metadata = {
     path: "/partners",
   }),
 };
-
-const ownerSplits = ownerPlans.filter(
-  (
-    plan
-  ): plan is Extract<
-    (typeof ownerPlans)[number],
-    { kind: "fleet-management"; split: "80/20" | "50/50" }
-  > =>
-    isFleetManagementPlan(plan) &&
-    (plan.split === "80/20" || plan.split === "50/50")
-);
 
 export default function PartnersPage() {
   return (
@@ -67,62 +54,37 @@ export default function PartnersPage() {
         day-to-day yourself.
       </p>
 
-      <section
-        className="mt-10 grid gap-6 sm:grid-cols-2"
-        aria-label="Owner splits"
-      >
-        {ownerSplits.map((plan) => (
-          <article
-            key={plan.slug}
-            className={cn(
-              "rounded-xl border-l-4 bg-navy-mid p-6 ring-1 ring-white/10 sm:p-8",
-              planAccentBorder[plan.accent]
-            )}
-          >
-            <span
-              aria-hidden
-              className={cn(
-                "mb-4 block h-1 w-12 rounded-full",
-                planAccentBar[plan.accent]
-              )}
-            />
-            <p className="font-heading text-[0.7rem] tracking-[0.22em] text-white/50 uppercase">
-              Owner split
-            </p>
-            <h2 className="mt-2 text-2xl font-bold text-white">{plan.split}</h2>
-            <p className="mt-2 font-heading text-sm tracking-[0.12em] text-white uppercase">
-              <Link href={`/plans#${plan.slug}`} className="hover:text-gold">
-                {plan.title}
-              </Link>
-            </p>
-            <p className="mt-2 text-sm leading-relaxed text-white/70">
-              Owner {plan.ownerShare} / company {plan.companyShare}
-            </p>
-            {plan.slug === fleetPartnerCommission.planSlug ? (
-              <div className="mt-6 border-t border-white/10 pt-6">
-                <p className="font-heading text-[0.7rem] tracking-[0.22em] text-gold uppercase">
-                  Month to month
-                </p>
-                <h3 className="mt-2 text-xl font-bold text-white">
-                  {fleetPartnerCommission.eyebrow}
-                </h3>
-                <ul className="mt-5 grid gap-3">
-                  {fleetPartnerCommission.tiers.map((tier) => (
-                    <li
-                      key={tier}
-                      className="rounded-lg bg-navy px-4 py-4 text-sm leading-relaxed text-white/80 ring-1 ring-white/10"
-                    >
-                      {tier}
-                    </li>
-                  ))}
-                </ul>
-                <p className="mt-4 text-sm leading-relaxed text-white/75">
-                  {fleetPartnerCommission.scope}
-                </p>
-              </div>
-            ) : null}
-          </article>
-        ))}
+      <section className="mt-10" aria-label="Fleet-partner commission">
+        <article
+          className={cn(
+            "rounded-xl border-l-4 bg-navy-mid p-6 ring-1 ring-white/10 sm:p-8",
+            planAccentBorder.red
+          )}
+        >
+          <span
+            aria-hidden
+            className={cn("mb-4 block h-1 w-12 rounded-full", planAccentBar.red)}
+          />
+          <p className="font-heading text-[0.7rem] tracking-[0.22em] text-gold uppercase">
+            Month to month
+          </p>
+          <h2 className="mt-2 text-xl font-bold text-white">
+            {fleetPartnerCommission.eyebrow}
+          </h2>
+          <ul className="mt-5 grid gap-3">
+            {fleetPartnerCommission.tiers.map((tier) => (
+              <li
+                key={tier}
+                className="rounded-lg bg-navy px-4 py-4 text-sm leading-relaxed text-white/80 ring-1 ring-white/10"
+              >
+                {tier}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-4 text-sm leading-relaxed text-white/75">
+            {fleetPartnerCommission.scope}
+          </p>
+        </article>
       </section>
 
       <ul className="mt-10 grid gap-6">
