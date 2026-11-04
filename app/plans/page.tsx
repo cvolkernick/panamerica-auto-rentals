@@ -9,6 +9,7 @@ import { SITE_NAME, socialMetadata } from "@/lib/seo";
 import {
   fleetPartnerCommission,
   getContactEmail,
+  isFleetManagementPlan,
   isSelfServePlan,
   noLockInTeaser,
   ownerPlans,
@@ -29,6 +30,17 @@ export const metadata: Metadata = {
     path: "/plans",
   }),
 };
+
+const ownerSplits = ownerPlans.filter(
+  (
+    plan
+  ): plan is Extract<
+    (typeof ownerPlans)[number],
+    { kind: "fleet-management"; split: "80/20" | "50/50" }
+  > =>
+    isFleetManagementPlan(plan) &&
+    (plan.split === "80/20" || plan.split === "50/50")
+);
 
 export default function PlansPage() {
   const email = getContactEmail();
@@ -163,6 +175,35 @@ export default function PlansPage() {
                   </div>
                 ))}
               </dl>
+
+              {plan.slug === "standard-management" ? (
+                <ul className="mt-6 grid gap-3">
+                  {ownerSplits.map((splitPlan) => (
+                    <li
+                      key={splitPlan.slug}
+                      className="rounded-lg bg-navy px-4 py-4 ring-1 ring-white/10"
+                    >
+                      <p className="font-heading text-[0.7rem] tracking-[0.22em] text-white/50 uppercase">
+                        Owner split
+                      </p>
+                      <p className="mt-2 text-2xl font-bold text-white">
+                        {splitPlan.split}
+                      </p>
+                      <p className="mt-2 font-heading text-sm tracking-[0.12em] text-white uppercase">
+                        <Link
+                          href={`/plans#${splitPlan.slug}`}
+                          className="hover:text-gold"
+                        >
+                          {splitPlan.title}
+                        </Link>
+                      </p>
+                      <p className="mt-2 text-sm leading-relaxed text-white/70">
+                        Owner {splitPlan.ownerShare} / company {splitPlan.companyShare}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
 
               {plan.slug === fleetPartnerCommission.planSlug ? (
                 <div
