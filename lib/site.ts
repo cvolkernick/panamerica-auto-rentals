@@ -127,22 +127,6 @@ export const noLockInTeaser = {
   body: "Agreements are month-to-month from day one, with no minimum term. Either party can end with written notice; it takes effect at the end of the calendar month after the month notice is given.",
 } as const;
 
-/**
- * Commission tiers for the standard management plan (80/20) only.
- * Month to month. Not part of guaranteed payment (50/50) or owner exit.
- */
-export const fleetPartnerCommission = {
-  planSlug: "standard-management",
-  eyebrow: "Fleet-partner commission",
-  term: "Month to month.",
-  scope: "Commission tiers apply to the standard management plan only.",
-  tiers: [
-    "20% for trips under 7 days",
-    "15% for 7-21 days",
-    "10% for trips over 21 days",
-  ],
-} as const;
-
 /** Included on every fleet-management plan. Opportunities stays Coming. */
 export const fleetSpotlightIncluded = {
   heading: "Spotlight included",

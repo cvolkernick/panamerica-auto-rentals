@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { planDisclaimer } from "@/lib/agreements";
 import { SITE_NAME, socialMetadata } from "@/lib/seo";
 import {
-  fleetPartnerCommission,
   getContactEmail,
   isSelfServePlan,
   noLockInTeaser,
@@ -163,39 +162,6 @@ export default function PlansPage() {
                   </div>
                 ))}
               </dl>
-
-              {plan.slug === fleetPartnerCommission.planSlug ? (
-                <div
-                  className="mt-6 border-t border-white/10 pt-6"
-                  id="fleet-partner-commission"
-                >
-                  <h3 className="text-xl font-bold text-white">
-                    {fleetPartnerCommission.eyebrow}
-                  </h3>
-                  <ul className="mt-4 grid gap-2">
-                    {fleetPartnerCommission.tiers.map((tier) => (
-                      <li
-                        key={tier}
-                        className="text-base leading-relaxed text-white/80"
-                      >
-                        {tier}
-                      </li>
-                    ))}
-                  </ul>
-                  <p className="mt-3 text-base leading-relaxed text-white/75">
-                    {fleetPartnerCommission.scope}
-                  </p>
-                  <p className="mt-3 text-base leading-relaxed text-white/75">
-                    {fleetPartnerCommission.term}
-                  </p>
-                  <Link
-                    href="/partners"
-                    className="mt-4 inline-block font-heading text-sm tracking-[0.16em] text-gold uppercase hover:underline"
-                  >
-                    Fleet partners
-                  </Link>
-                </div>
-              ) : null}
 
               <PlanAgreementLinks plan={plan} />
             </article>

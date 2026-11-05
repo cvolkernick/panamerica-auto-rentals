@@ -4,7 +4,6 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { SITE_NAME, socialMetadata } from "@/lib/seo";
 import {
-  fleetPartnerCommission,
   fleetPartners,
   isFleetManagementPlan,
   ownerPlans,
@@ -98,29 +97,6 @@ export default function PartnersPage() {
             <p className="mt-2 text-sm leading-relaxed text-white/70">
               Owner {plan.ownerShare} / company {plan.companyShare}
             </p>
-            {plan.slug === fleetPartnerCommission.planSlug ? (
-              <div className="mt-6 border-t border-white/10 pt-6">
-                <p className="font-heading text-[0.7rem] tracking-[0.22em] text-gold uppercase">
-                  Month to month
-                </p>
-                <h3 className="mt-2 text-xl font-bold text-white">
-                  {fleetPartnerCommission.eyebrow}
-                </h3>
-                <ul className="mt-5 grid gap-3">
-                  {fleetPartnerCommission.tiers.map((tier) => (
-                    <li
-                      key={tier}
-                      className="rounded-lg bg-navy px-4 py-4 text-sm leading-relaxed text-white/80 ring-1 ring-white/10"
-                    >
-                      {tier}
-                    </li>
-                  ))}
-                </ul>
-                <p className="mt-4 text-sm leading-relaxed text-white/75">
-                  {fleetPartnerCommission.scope}
-                </p>
-              </div>
-            ) : null}
           </article>
         ))}
       </section>
