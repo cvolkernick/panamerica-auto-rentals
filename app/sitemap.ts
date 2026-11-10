@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 
 import { absoluteUrl } from "@/lib/seo";
 
-/** Public pages linked from the site nav and footer. Keep in sync with `nav` / `cyberfleetNav` in lib/site.ts. */
+/** Public pages linked from the site nav and footer. Keep in sync with `nav` / `cyberfleetNav` in lib/site.ts. Do not add the signed-in portal. */
 const PUBLIC_PATHS = [
   "/",
   "/about",
