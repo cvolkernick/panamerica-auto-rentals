@@ -1,6 +1,7 @@
 import { sha256Hex } from "./codec";
 import {
-  countLoginAttempts,
+  countLoginFailuresForEmail,
+  countLoginFailuresForPair,
   deleteExpiredSessions,
   deleteOldLoginAttempts,
   deleteSessionByHash,
@@ -15,6 +16,7 @@ import {
   updatePasswordHash,
 } from "./db";
 import type { PortalD1 } from "./d1";
+import { normalizeLoginEmail } from "./email";
 import type { PortalEnv } from "./env";
 import { clientIp, devAuthEmail, originAllowed, requestHost, sessionHostAllowed } from "./hosts";
 import {
@@ -26,7 +28,7 @@ import {
   unauthorized,
   validationError,
 } from "./http";
-import { burnPasswordCheck, hashPassword, parsePasswordHash, passwordAcceptable, verifyPassword } from "./password";
+import { configuredPepper, decodeDerived, macMatches, sealDerived } from "./mac";
 import { secretsEqual } from "./secrets";
 import {
   applyCookies,
@@ -39,23 +41,23 @@ import {
 } from "./session";
 import type { PortalAuth } from "./types";
 
-export const EMAIL_ATTEMPT_LIMIT = 8;
-export const IP_ATTEMPT_LIMIT = 20;
+/** Failed attempts for one email from one IP. Successes are not counted. */
+export const PAIR_FAILURE_LIMIT = 20;
+/** Email-wide cap, high enough that strangers cannot lock the public address. */
+export const EMAIL_FAILURE_LIMIT = 200;
 export const ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
 const INVALID_ATTEMPT_EMAIL = "invalid";
-
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const SETUP_ATTEMPT_EMAIL = "setup";
 
 function invalidCredentials(): Response {
   return json(INVALID_CREDENTIALS, 401);
 }
 
-export function normalizeLoginEmail(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const email = value.trim().toLowerCase();
-  if (email.length > 254 || !EMAIL_PATTERN.test(email)) return null;
-  return email;
+function authUnconfigured(): Response {
+  return json({ error: "auth_unconfigured" }, 500);
 }
+
+export { normalizeLoginEmail } from "./email";
 
 export async function requireCsrf(
   request: Request,
@@ -68,12 +70,21 @@ export async function requireCsrf(
   return null;
 }
 
-async function limited(db: PortalD1, email: string, ip: string, cutoffIso: string): Promise<boolean> {
-  const [byEmail, byIp] = await Promise.all([
-    countLoginAttempts(db, "email", email, cutoffIso),
-    countLoginAttempts(db, "ip", ip, cutoffIso),
+async function overFailureLimit(
+  db: PortalD1,
+  email: string,
+  ip: string,
+  cutoffIso: string
+): Promise<boolean> {
+  const [pair, byEmail] = await Promise.all([
+    countLoginFailuresForPair(db, email, ip, cutoffIso),
+    countLoginFailuresForEmail(db, email, cutoffIso),
   ]);
-  return byEmail >= EMAIL_ATTEMPT_LIMIT || byIp >= IP_ATTEMPT_LIMIT;
+  return pair >= PAIR_FAILURE_LIMIT || byEmail >= EMAIL_FAILURE_LIMIT;
+}
+
+async function recordFailure(db: PortalD1, email: string, ip: string, nowIso: string): Promise<void> {
+  await insertLoginAttempt(db, email, ip, nowIso);
 }
 
 export async function authenticate(
@@ -132,6 +143,8 @@ export async function handleLogin(
   const host = requestHost(request);
   if (!sessionHostAllowed(host)) return forbidden("host_not_allowed");
   if (!originAllowed(request)) return forbidden("csrf");
+  const pepper = configuredPepper(env);
+  if (!pepper) return authUnconfigured();
 
   const body = await readJson(request);
   if (!body.ok) return body.response;
@@ -139,36 +152,29 @@ export async function handleLogin(
     return json({ error: "invalid_json" }, 400);
   }
   const record = body.value as Record<string, unknown>;
-  if (typeof record.email !== "string" || typeof record.password !== "string") {
+  if (typeof record.email !== "string" || typeof record.derived !== "string") {
     return validationError({ form: "Enter your email and password." });
   }
 
   const email = normalizeLoginEmail(record.email);
-  const password = record.password;
+  const derived = decodeDerived(record.derived);
   const attemptEmail = email ?? INVALID_ATTEMPT_EMAIL;
   const ip = clientIp(request);
+  const nowIso = now.toISOString();
   const cutoff = new Date(now.getTime() - ATTEMPT_WINDOW_MS).toISOString();
   await deleteOldLoginAttempts(db, cutoff);
-  if (await limited(db, attemptEmail, ip, cutoff)) {
-    await insertLoginAttempt(db, attemptEmail, ip, now.toISOString());
+  if (await overFailureLimit(db, attemptEmail, ip, cutoff)) {
+    await recordFailure(db, attemptEmail, ip, nowIso);
     return rateLimited();
   }
-  await insertLoginAttempt(db, attemptEmail, ip, now.toISOString());
 
-  const acceptable = passwordAcceptable(password);
-  if (!email || !acceptable) {
-    await burnPasswordCheck(password);
-    return invalidCredentials();
-  }
-
-  const owner = await getOwnerByEmail(db, email);
+  const owner = email ? await getOwnerByEmail(db, email) : null;
   const stored = owner ? await getPasswordHash(db, Number(owner.id)) : null;
-  if (!owner || !stored || !parsePasswordHash(stored)) {
-    await burnPasswordCheck(password);
+  const matches = await macMatches(pepper, derived, stored);
+  if (!email || !derived || !owner || !matches) {
+    await recordFailure(db, attemptEmail, ip, nowIso);
     return invalidCredentials();
   }
-  const matches = await verifyPassword(password, stored);
-  if (!matches) return invalidCredentials();
 
   const presented = readCookie(request, SESSION_COOKIE);
   if (presented) await deleteSessionByHash(db, await sha256Hex(presented));
@@ -180,7 +186,7 @@ export async function handleLogin(
     Number(owner.id),
     secrets.csrfToken,
     expiresAt,
-    now.toISOString()
+    nowIso
   );
   const response = json({
     email: owner.email.trim().toLowerCase(),
@@ -223,19 +229,23 @@ export async function handleSetupPassword(
   const expected = setupConfigured(env);
   if (!expected) return json({ error: "not_found" }, 404);
   if (!sessionHostAllowed(requestHost(request))) return forbidden("host_not_allowed");
+  const pepper = configuredPepper(env);
+  if (!pepper) return authUnconfigured();
 
   const ip = clientIp(request);
+  const nowIso = now.toISOString();
   const cutoff = new Date(now.getTime() - ATTEMPT_WINDOW_MS).toISOString();
-  const setupKey = `setup:${ip}`;
   await deleteOldLoginAttempts(db, cutoff);
-  if (await limited(db, setupKey, ip, cutoff)) {
-    await insertLoginAttempt(db, setupKey, ip, now.toISOString());
+  if (await overFailureLimit(db, SETUP_ATTEMPT_EMAIL, ip, cutoff)) {
+    await recordFailure(db, SETUP_ATTEMPT_EMAIL, ip, nowIso);
     return rateLimited();
   }
-  await insertLoginAttempt(db, setupKey, ip, now.toISOString());
 
   const provided = request.headers.get("x-portal-setup-token") ?? "";
-  if (!(await secretsEqual(provided, expected))) return unauthorized();
+  if (!(await secretsEqual(provided, expected))) {
+    await recordFailure(db, SETUP_ATTEMPT_EMAIL, ip, nowIso);
+    return unauthorized();
+  }
 
   const body = await readJson(request);
   if (!body.ok) return body.response;
@@ -243,16 +253,17 @@ export async function handleSetupPassword(
     return json({ error: "invalid_json" }, 400);
   }
   const record = body.value as Record<string, unknown>;
-  const email = normalizeLoginEmail(record.email);
-  if (!email) return validationError({ email: "Enter a valid email." });
-  if (typeof record.password !== "string" || !passwordAcceptable(record.password)) {
-    return validationError({ password: "Use 12 to 128 characters." });
+  if ("password" in record) {
+    return validationError({ derived: "Send the derived key." });
   }
+  const email = normalizeLoginEmail(record.email);
+  const derived = decodeDerived(record.derived);
+  if (!email) return validationError({ email: "Enter a valid email." });
+  if (!derived) return validationError({ derived: "Send the derived key." });
   const owner = await getOwnerByEmail(db, email);
   if (!owner) return json({ error: "setup_failed" }, 400);
 
-  const passwordHash = await hashPassword(record.password);
-  await updatePasswordHash(db, Number(owner.id), passwordHash);
+  await updatePasswordHash(db, Number(owner.id), await sealDerived(pepper, derived));
   await deleteSessionsForOwner(db, Number(owner.id));
   return json({ ok: true });
 }

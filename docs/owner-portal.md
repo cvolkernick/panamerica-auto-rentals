@@ -21,15 +21,17 @@ Team accounts, money, miles, a second person signing in, booking changes, and se
 
 Pages Functions under `/api/portal` check a server-side session row in D1. The browser holds only an HttpOnly cookie named `__Host-portal_session` (`Secure`, `SameSite=Lax`, `Path=/`, no `Domain`). `__Host-` cannot be shared across hosts, so `/owner`, `/admin`, and `/api/portal` on `panamericafleet.com` redirect to `https://www.panamericafleet.com` with status 308. Public pages are not redirected by that rule.
 
-Passwords are stored as Argon2id hashes (`m=19456`, `t=2`, `p=1`). The database never stores the password. Login and logout live at `/api/portal/login` and `/api/portal/logout`. Logout deletes the session row. A new login rotates the session id. Sessions expire after 7 days. State-changing requests must come from the same origin and send the CSRF token returned by login and by `/api/portal/session`.
+The browser runs Argon2id in WebAssembly (`m=19456`, `t=2`, `p=1`). The salt is SHA-256 of a fixed site prefix plus the normalized email, so the server does not look up a salt and a salt list cannot show which emails exist. The browser sends that 32-byte result. The Worker stores HMAC-SHA256 of it, keyed with the `PORTAL_PEPPER` secret, and compares the HMAC in constant time. The Worker does not run Argon2id, bcrypt, or PBKDF2. The database never stores the password or the raw derived key.
 
-Unknown emails and wrong passwords get the same `invalid_credentials` response. Login attempts are limited per email and per IP. `*.pages.dev` cannot log in and cannot use a session cookie.
+Login and logout live at `/api/portal/login` and `/api/portal/logout`. Logout deletes the session row. A new login rotates the session id. Sessions expire after 7 days. State-changing requests must come from the same origin and send the CSRF token returned by login and by `/api/portal/session`.
+
+Unknown emails and wrong passwords get the same `invalid_credentials` response. Only failed logins count. The tight limit is per email and IP together. A separate email-only cap is much higher, so a stranger cannot lock `panamerica.cars@gmail.com` by failing a few times. `*.pages.dev` cannot log in and cannot use a session cookie.
+
+`public/_routes.json` invokes Functions only for `/owner`, `/owner/*`, `/admin`, `/admin/*`, and `/api/portal/*`. Public pages, including `/` and `/fleet`, are served as static files.
 
 `owners.is_admin` marks an admin. The seeded row is admin. `ADMIN_EMAILS` (comma-separated) also grants admin for an email that already has an owners row. It does not create a login by itself.
 
 `PORTAL_DEV_AUTH` is the local bypass. It works only when the value is exactly `1`, and only off the live hosts. `www.panamericafleet.com`, `panamericafleet.com`, and `*.pages.dev` ignore it. Leave it unset on the Pages project. Production config in this repo does not turn it on.
-
-Argon2id at these settings uses more CPU than the Workers Free plan allows (10 ms). On that plan a sign-in can fail with Error 1102. Workers Paid gives a default 30 second CPU budget, which covers a sign-in. That is a Pages/Workers compute setting. It does not turn on Access or Zero Trust.
 
 ## 1. Create the D1 database
 
@@ -62,37 +64,40 @@ In the Cloudflare dashboard: Workers & Pages → the site project → Settings �
 
 The name has to be `DB`.
 
-## 4. Set the first password
+## 4. Set the pepper
 
-Do this after the functions are deployed. The password is typed only in your shell. It does not go in git, in this file, or in a migration.
-
-Set `PORTAL_SETUP_TOKEN` on the Pages project to a long random string (32 characters or more). Leave `PORTAL_DEV_AUTH` unset. Redeploy so the function can see the token. Then, from a trusted machine:
+Generate a pepper on a trusted machine and paste it into the Pages project as an encrypted environment variable named `PORTAL_PEPPER`. Use at least 32 characters. Do not commit it, and do not put it in this file.
 
 ```bash
-curl -sS -X POST https://www.panamericafleet.com/api/portal/setup-password \
-  -H "content-type: application/json" \
-  -H "x-portal-setup-token: $PORTAL_SETUP_TOKEN" \
-  -d '{"email":"panamerica.cars@gmail.com","password":"'"$PORTAL_PASSWORD"'"}'
+node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('base64url'))"
 ```
 
-`PORTAL_PASSWORD` is the new password in that shell only. A success response is `{"ok":true}`. The response does not include the password or the hash. Remove `PORTAL_SETUP_TOKEN` from the Pages project when you are done and redeploy. While it is unset, that route responds as not found.
+Workers & Pages → the site project → Settings → Environment variables → Production → `PORTAL_PEPPER`. Redeploy so Functions can read it. Login and the setup route do nothing useful until this secret exists.
 
-If you would rather write the hash yourself, hash on the trusted machine and paste the hash into the command. Do not commit it. The placeholder below is not a real hash.
+## 5. Set the first password
+
+Do this after the functions are deployed and `PORTAL_PEPPER` is set. The password is typed only into stdin. It does not go in git, in this file, in a migration, or on a command line.
+
+Set `PORTAL_SETUP_TOKEN` on the Pages project to a long random string (32 characters or more). Leave `PORTAL_DEV_AUTH` unset. Redeploy so the function can see the token. Then, from a trusted machine, run this and type the password followed by Ctrl-D. The local script turns the password into the derived key. curl reads that JSON from stdin with `--data @-`:
 
 ```bash
-npx tsx -e 'import { hashPassword } from "./lib/portal/password.ts"; const pw = process.env.PORTAL_PASSWORD; if (!pw) process.exit(1); hashPassword(pw).then((hash) => process.stdout.write(hash));'
-npx wrangler d1 execute panamerica-portal --remote --command "UPDATE owners SET password_hash = '<paste hash>' WHERE email = 'panamerica.cars@gmail.com';"
+npx tsx scripts/portal-setup-body.ts panamerica.cars@gmail.com \
+  | curl -sS -X POST https://www.panamericafleet.com/api/portal/setup-password \
+      -H "content-type: application/json" \
+      -H "x-portal-setup-token: $PORTAL_SETUP_TOKEN" \
+      --data @-
 ```
 
-The Pages project needs the `nodejs_compat` compatibility flag only if a later dependency asks for Node built-ins. This login path uses Web Crypto and does not.
+A success response is `{"ok":true}`. The response does not include the password, the derived key, or the HMAC. Remove `PORTAL_SETUP_TOKEN` from the Pages project when you are done and redeploy. While it is unset, that route responds as not found. Leave `PORTAL_PEPPER` in place. Login needs it.
 
-## 5. Pages environment variables
+## 6. Pages environment variables
 
 Workers & Pages → the site project → Settings → Environment variables. Set them for Production. Do not set the dev bypass.
 
 | Name | Value |
 | --- | --- |
 | `ADMIN_EMAILS` | Optional. `panamerica.cars@gmail.com` is already admin from the seed. |
+| `PORTAL_PEPPER` | The HMAC pepper from step 4. Leave it set. |
 | `PORTAL_SETUP_TOKEN` | Only while you are setting the first password. Then unset it. |
 | `PORTAL_DEV_AUTH` | Leave unset. |
 | `PORTAL_DEV_EMAIL` | Leave unset. |
@@ -108,7 +113,7 @@ Confirm in a private window:
 - `https://panamericafleet.com/owner/` redirects to the www owner page.
 - `https://panamericafleet.com/fleet/` is unchanged from the existing public routing.
 
-## 6. Local preview
+## 7. Local preview
 
 `npm run dev` serves the static shells only. Pages Functions do not run inside `next dev`. For a local API, use Wrangler against a local D1 and a gitignored `.dev.vars`:
 
@@ -130,7 +135,7 @@ Then, after `npm run build`:
 npx wrangler pages dev out --d1 DB=<database id from step 1>
 ```
 
-Use `127.0.0.1`. The bypass does nothing on `pages.dev` or `panamericafleet.com`. To try the real form locally, leave the bypass unset and set a hash in the local database the same way as step 4. Do not put that password in the repo.
+Use `127.0.0.1`. The bypass does nothing on `pages.dev` or `panamericafleet.com`. To try the real form locally, leave the bypass unset, set `PORTAL_PEPPER` in `.dev.vars`, and set the password the same way as step 5. Do not put that password or pepper in the repo.
 
 ## Checks
 

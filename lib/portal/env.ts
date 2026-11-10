@@ -8,4 +8,6 @@ export type PortalEnv = {
   PORTAL_DEV_EMAIL?: string;
   /** Operator secret. Unset means the setup route does nothing. */
   PORTAL_SETUP_TOKEN?: string;
+  /** HMAC pepper. Unset means login and setup cannot seal a password. */
+  PORTAL_PEPPER?: string;
 };

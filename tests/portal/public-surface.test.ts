@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { test } from "node:test";
 
+import { functionsInvokedFor, type FunctionRoutes } from "../../lib/portal/routes";
+
 function source(path: string): string {
   return readFileSync(path, "utf8");
 }
@@ -64,4 +66,25 @@ test("login is the signed-out portal shell and access jwt config is gone", () =>
   assert.doesNotMatch(source("package.json"), /"jose"/);
   assert.doesNotMatch(source("migrations/0001_init.sql"), /password_hash/);
   assert.doesNotMatch(source("migrations/0002_auth.sql"), /\$argon2id\$v=/);
+});
+
+test("functions are not invoked for public routes", () => {
+  const routes = JSON.parse(source("public/_routes.json")) as FunctionRoutes;
+  assert.deepEqual(routes.include, ["/owner", "/owner/*", "/admin", "/admin/*", "/api/portal/*"]);
+  assert.deepEqual(routes.exclude, []);
+  for (const path of ["/", "/fleet", "/fleet/", "/plans/", "/about", "/contact/", "/sitemap.xml", "/robots.txt"]) {
+    assert.equal(functionsInvokedFor(path, routes), false, path);
+  }
+  for (const path of ["/owner", "/owner/", "/admin/", "/admin/index.html", "/api/portal/login", "/api/portal/logout", "/api/portal/session"]) {
+    assert.equal(functionsInvokedFor(path, routes), true, path);
+  }
+  assert.equal(existsSync("functions/_middleware.ts"), true);
+});
+
+test("owner portal docs do not recommend a paid worker plan", () => {
+  const docs = source("docs/owner-portal.md");
+  assert.doesNotMatch(docs, /Workers Paid/i);
+  assert.doesNotMatch(docs, /Workers Standard/i);
+  assert.match(docs, /--data @-/);
+  assert.doesNotMatch(docs, /password":"'"/);
 });

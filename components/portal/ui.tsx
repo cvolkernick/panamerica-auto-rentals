@@ -3,6 +3,8 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 
 import { portalRequest, setPortalCsrf } from "@/components/portal/api";
+import { encodeDerived, derivePortalKey } from "@/lib/portal/derive";
+import { normalizeLoginEmail } from "@/lib/portal/email";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -93,11 +95,24 @@ export function PortalLogin({ onSuccess }: { onSuccess: () => void }) {
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
+    const normalized = normalizeLoginEmail(email);
+    if (!normalized) {
+      setError("That email or password is not valid.");
+      return;
+    }
     setError("");
     setSubmitting(true);
+    let derived: string;
+    try {
+      derived = encodeDerived(await derivePortalKey(normalized, password));
+    } catch {
+      setSubmitting(false);
+      setError("Could not sign in. Try again.");
+      return;
+    }
     const result = await portalRequest("/api/portal/login", {
       method: "POST",
-      body: { email, password },
+      body: { email: normalized, derived },
     });
     setSubmitting(false);
     if (result.ok) {

@@ -1,6 +1,5 @@
--- Password hashes and revocable server-side sessions.
--- Does not set a password and does not insert a hash. The operator sets the
--- first hash after deploy, outside this repo.
+-- Pepper HMAC of the browser-derived key, plus revocable server-side sessions.
+-- Does not set a password or a hash. The operator sets the first value after deploy.
 
 PRAGMA foreign_keys = ON;
 

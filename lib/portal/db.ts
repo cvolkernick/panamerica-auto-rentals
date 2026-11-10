@@ -281,17 +281,30 @@ export async function deleteOldLoginAttempts(db: PortalD1, cutoffIso: string): P
   await db.prepare(`DELETE FROM login_attempts WHERE created_at <= ?`).bind(cutoffIso).run();
 }
 
-export async function countLoginAttempts(
+export async function countLoginFailuresForEmail(
   db: PortalD1,
-  column: "email" | "ip",
-  value: string,
+  email: string,
   cutoffIso: string
 ): Promise<number> {
-  const sql =
-    column === "email"
-      ? `SELECT COUNT(*) AS n FROM login_attempts WHERE email = ? AND created_at > ?`
-      : `SELECT COUNT(*) AS n FROM login_attempts WHERE ip = ? AND created_at > ?`;
-  const row = await db.prepare(sql).bind(value, cutoffIso).first<{ n: number }>();
+  const row = await db
+    .prepare(`SELECT COUNT(*) AS n FROM login_attempts WHERE email = ? AND created_at > ?`)
+    .bind(email, cutoffIso)
+    .first<{ n: number }>();
+  return Number(row?.n ?? 0);
+}
+
+export async function countLoginFailuresForPair(
+  db: PortalD1,
+  email: string,
+  ip: string,
+  cutoffIso: string
+): Promise<number> {
+  const row = await db
+    .prepare(
+      `SELECT COUNT(*) AS n FROM login_attempts WHERE email = ? AND ip = ? AND created_at > ?`
+    )
+    .bind(email, ip, cutoffIso)
+    .first<{ n: number }>();
   return Number(row?.n ?? 0);
 }
 
