@@ -1,11 +1,9 @@
-import { devAuthEmail, verifyAccessJwt, type AccessJwtError } from "./access";
 import {
   carJson,
   countStoredAdmins,
   deleteCar,
   getCarById,
   getOwnedCar,
-  getOwnerByEmail,
   getOwnerById,
   insertCar,
   insertOwner,
@@ -21,8 +19,9 @@ import {
 } from "./db";
 import type { PortalD1 } from "./d1";
 import type { PortalEnv } from "./env";
-import { forbidden, json, readJson, unauthorized, validationError } from "./http";
-import type { OwnerJson } from "./types";
+import { portalApexRedirect } from "./hosts";
+import { forbidden, json, readJson, validationError } from "./http";
+import { authenticate, handleLogin, handleLogout, handleSetupPassword, requireCsrf } from "./login";
 import {
   parseCarCreate,
   parseCarPatch,
@@ -31,17 +30,6 @@ import {
   type CarWrite,
   type OwnerWrite,
 } from "./validate";
-import type { JWTVerifyGetKey } from "jose";
-
-export type PortalDeps = {
-  /** Tests pass a local public key. Production verifies against Access certs. */
-  jwtKey?: CryptoKey | JWTVerifyGetKey;
-};
-
-export type PortalSession = {
-  email: string;
-  owner: OwnerJson;
-};
 
 function methodNotAllowed(allow: string): Response {
   return json({ error: "method_not_allowed" }, 405, { allow });
@@ -58,46 +46,12 @@ function parsePathId(raw: string): number | null {
   return id;
 }
 
-async function authenticate(
-  request: Request,
-  env: PortalEnv,
-  deps: PortalDeps | undefined,
-  db: PortalD1
-): Promise<PortalSession | Response> {
-  const devEmail = devAuthEmail(request, env);
-  let email: string;
-  if (devEmail) {
-    email = devEmail;
-  } else {
-    if (!env.CF_ACCESS_TEAM_DOMAIN?.trim() || !env.CF_ACCESS_AUD?.trim()) {
-      return unauthorized("access_not_configured");
-    }
-    const token = request.headers.get("cf-access-jwt-assertion")?.trim();
-    if (!token) return unauthorized();
-    try {
-      email = await verifyAccessJwt(token, env, deps?.jwtKey);
-    } catch (error) {
-      const named = error as AccessJwtError;
-      if (named?.name === "AccessJwtError" && named.message === "access is not configured") {
-        return unauthorized("access_not_configured");
-      }
-      return unauthorized();
-    }
-  }
-
-  const row = await getOwnerByEmail(db, email);
-  if (!row) return forbidden("unknown_email", email);
-  return { email: row.email.trim().toLowerCase(), owner: ownerJson(row, env) };
-}
-
 function requireDb(env: PortalEnv): PortalD1 | Response {
   if (!env.DB) return json({ error: "database_unconfigured" }, 500);
   return env.DB;
 }
 
-async function withUnique(
-  fn: () => Promise<Response>
-): Promise<Response> {
+async function withUnique(fn: () => Promise<Response>): Promise<Response> {
   try {
     return await fn();
   } catch (error) {
@@ -148,24 +102,18 @@ async function ensureOwner(db: PortalD1, ownerId: number): Promise<Response | nu
   return null;
 }
 
-export async function handlePortal(
-  request: Request,
-  env: PortalEnv,
-  deps?: PortalDeps
-): Promise<Response> {
+export async function handlePortal(request: Request, env: PortalEnv): Promise<Response> {
   try {
-    return await route(request, env, deps);
+    const redirect = portalApexRedirect(request);
+    if (redirect) return redirect;
+    return await route(request, env);
   } catch (error) {
-    console.error(error);
+    console.error(error instanceof Error ? error.name : "portal_error");
     return json({ error: "server_error" }, 500);
   }
 }
 
-async function route(
-  request: Request,
-  env: PortalEnv,
-  deps: PortalDeps | undefined
-): Promise<Response> {
+async function route(request: Request, env: PortalEnv): Promise<Response> {
   const url = new URL(request.url);
   const path = url.pathname.replace(/\/+$/, "") || "/";
   const method = request.method.toUpperCase();
@@ -175,17 +123,26 @@ async function route(
   if (dbOrResponse instanceof Response) return dbOrResponse;
   const db = dbOrResponse;
 
+  if (path === "/api/portal/login") return handleLogin(request, env, db);
+  if (path === "/api/portal/setup-password") return handleSetupPassword(request, env, db);
+
+  const auth = await authenticate(request, env, db);
+  if (auth instanceof Response) return auth;
+
+  if (path === "/api/portal/logout") return handleLogout(request, db, auth);
+
+  if (method !== "GET" && method !== "HEAD") {
+    const denied = await requireCsrf(request, auth);
+    if (denied) return denied;
+  }
+
   if (path === "/api/portal/session") {
     if (method !== "GET") return methodNotAllowed("GET");
-    const auth = await authenticate(request, env, deps, db);
-    if (auth instanceof Response) return auth;
-    return json({ email: auth.email, owner: auth.owner });
+    return json({ email: auth.email, owner: auth.owner, csrfToken: auth.csrfToken });
   }
 
   if (path === "/api/portal/cars") {
     if (method !== "GET") return methodNotAllowed("GET");
-    const auth = await authenticate(request, env, deps, db);
-    if (auth instanceof Response) return auth;
     const cars = await listOwnedCars(db, auth.owner.id);
     return json({ cars: cars.map(carJson) });
   }
@@ -193,8 +150,6 @@ async function route(
   const ownedCar = path.match(/^\/api\/portal\/cars\/([1-9]\d*)$/);
   if (ownedCar) {
     if (method !== "GET") return methodNotAllowed("GET");
-    const auth = await authenticate(request, env, deps, db);
-    if (auth instanceof Response) return auth;
     const id = parsePathId(ownedCar[1]);
     if (id === null) return notFound();
     const car = await getOwnedCar(db, id, auth.owner.id);
@@ -203,8 +158,6 @@ async function route(
   }
 
   if (path.startsWith("/api/portal/admin")) {
-    const auth = await authenticate(request, env, deps, db);
-    if (auth instanceof Response) return auth;
     if (!auth.owner.isAdmin) return forbidden("not_admin");
     return routeAdmin(request, db, env, path, method);
   }

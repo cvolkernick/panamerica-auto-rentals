@@ -1,23 +1,27 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { DatabaseSync, type SqlValue } from "node:sqlite";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type { D1Prepared, PortalD1 } from "../../lib/portal/d1";
 
-export function migrationPath(): string {
+function migrationsDir(): string {
   const here = dirname(fileURLToPath(import.meta.url));
-  return join(here, "../../migrations/0001_init.sql");
+  return join(here, "../../migrations");
 }
 
-export function loadMigrationSql(): string {
-  return readFileSync(migrationPath(), "utf8");
+export function loadMigrationSql(name = "0001_init.sql"): string {
+  if (!/^[0-9]+_[a-z0-9_]+\.sql$/.test(name)) throw new Error("bad migration name");
+  return readFileSync(join(migrationsDir(), name), "utf8");
 }
 
-export function createMemoryD1(sql = loadMigrationSql()): PortalD1 {
+export function createMemoryD1(): PortalD1 {
   const db = new DatabaseSync(":memory:");
   db.exec("PRAGMA foreign_keys = ON;");
-  db.exec(sql);
+  const files = readdirSync(migrationsDir())
+    .filter((name) => name.endsWith(".sql"))
+    .sort();
+  for (const name of files) db.exec(readFileSync(join(migrationsDir(), name), "utf8"));
   return {
     prepare(query: string): D1Prepared {
       const statement = db.prepare(query);
