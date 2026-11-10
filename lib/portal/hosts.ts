@@ -96,10 +96,51 @@ export function originAllowed(request: Request): boolean {
   return originUrl.protocol === "https:";
 }
 
+function ipv4Key(ip: string): string | null {
+  const parts = ip.split(".");
+  if (parts.length !== 4) return null;
+  const numbers = parts.map((part) => (/^\d{1,3}$/.test(part) ? Number(part) : NaN));
+  if (numbers.some((number) => !Number.isInteger(number) || number > 255)) return null;
+  return numbers.join(".");
+}
+
+/** First 64 bits of an IPv6 address, or null when the text is not an address. */
+function ipv6Prefix64(ip: string): string | null {
+  if (ip.includes("%") || (ip.match(/::/g) ?? []).length > 1) return null;
+  const halves = ip.split("::");
+  const head = halves[0] ? halves[0].split(":") : [];
+  const tail = halves.length === 2 ? (halves[1] ? halves[1].split(":") : []) : [];
+  if ([...head, ...tail].some((part) => part.includes("."))) return null;
+  if (halves.length === 1 && head.length !== 8) return null;
+  const missing = 8 - head.length - tail.length;
+  if (missing < 0) return null;
+  const groups = [...head, ...Array.from({ length: missing }, () => "0"), ...tail];
+  if (groups.length !== 8) return null;
+  const parsed = groups.map((group) => (/^[a-f0-9]{1,4}$/.test(group) ? Number.parseInt(group, 16) : NaN));
+  if (parsed.some((number) => !Number.isInteger(number) || number > 0xffff)) return null;
+  return parsed
+    .slice(0, 4)
+    .map((number) => number.toString(16))
+    .join(":");
+}
+
+/**
+ * Rate-limit key. IPv4 stays the full address. IPv6 is the /64 so a subnet
+ * cannot rotate host bits past the per-address cap.
+ */
+export function rateLimitIp(raw: string): string {
+  const ip = raw.trim().toLowerCase();
+  if (!ip || ip.length > 64 || !/^[a-f0-9:.]+$/.test(ip)) return "unknown";
+  const v4 = ipv4Key(ip);
+  if (v4) return v4;
+  const mapped = ip.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/);
+  if (mapped) return ipv4Key(mapped[1]) ?? "unknown";
+  const prefix = ipv6Prefix64(ip);
+  return prefix ? `${prefix}::/64` : "unknown";
+}
+
 export function clientIp(request: Request): string {
   const cf = request.headers.get("cf-connecting-ip")?.trim() ?? "";
-  if (cf.length > 0 && cf.length <= 64 && /^[a-fA-F0-9:.]+$/.test(cf)) {
-    return cf.toLowerCase();
-  }
-  return "unknown";
+  if (!cf) return "unknown";
+  return rateLimitIp(cf);
 }

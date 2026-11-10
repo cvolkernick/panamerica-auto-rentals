@@ -25,7 +25,7 @@ The browser runs Argon2id in WebAssembly (`m=19456`, `t=2`, `p=1`). The salt is 
 
 Login and logout live at `/api/portal/login` and `/api/portal/logout`. Logout deletes the session row. A new login rotates the session id. Sessions expire after 7 days. State-changing requests must come from the same origin and send the CSRF token returned by login and by `/api/portal/session`.
 
-Unknown emails and wrong passwords get the same `invalid_credentials` response. Only failed logins count. The tight limit is per email and IP together. A separate email-only cap is much higher, so a stranger cannot lock `panamerica.cars@gmail.com` by failing a few times. `*.pages.dev` cannot log in and cannot use a session cookie.
+Unknown emails and wrong passwords get the same `invalid_credentials` response. Only failed logins count, and a request that is already limited is not counted again. The tight limit is one email plus one IPv4 address, or one email plus one IPv6 /64. The higher email-wide cap applies only to a network that already has a few recent failures, so a clean network can still sign in. A browser that signed in before keeps a device cookie that skips that email-wide cap. `*.pages.dev` cannot log in and cannot use a session cookie.
 
 `public/_routes.json` invokes Functions only for `/owner`, `/owner/*`, `/admin`, `/admin/*`, and `/api/portal/*`. Public pages, including `/` and `/fleet`, are served as static files.
 
@@ -78,15 +78,19 @@ Workers & Pages → the site project → Settings → Environment variables → 
 
 Do this after the functions are deployed and `PORTAL_PEPPER` is set. The password is typed only into stdin. It does not go in git, in this file, in a migration, or on a command line.
 
-Set `PORTAL_SETUP_TOKEN` on the Pages project to a long random string (32 characters or more). Leave `PORTAL_DEV_AUTH` unset. Redeploy so the function can see the token. Then, from a trusted machine, run this and type the password followed by Ctrl-D. The local script turns the password into the derived key. curl reads that JSON from stdin with `--data @-`:
+Set `PORTAL_SETUP_TOKEN` on the Pages project to a long random string (32 characters or more). Leave `PORTAL_DEV_AUTH` unset. Redeploy so the function can see the token. Then, from a trusted machine, `read -s` takes the password without echoing it. The script turns that stdin into the derived key. curl reads the JSON from its own stdin with `--data @-`, so the password is not a command-line argument:
 
 ```bash
-npx tsx scripts/portal-setup-body.ts panamerica.cars@gmail.com \
+read -s -p "Password: " PORTAL_PASSWORD
+printf '%s' "$PORTAL_PASSWORD" | npx tsx scripts/portal-setup-body.mts panamerica.cars@gmail.com \
   | curl -sS -X POST https://www.panamericafleet.com/api/portal/setup-password \
       -H "content-type: application/json" \
       -H "x-portal-setup-token: $PORTAL_SETUP_TOKEN" \
       --data @-
+unset PORTAL_PASSWORD
 ```
+
+Running the script on its own in a terminal also prompts for the password and does not echo it.
 
 A success response is `{"ok":true}`. The response does not include the password, the derived key, or the HMAC. Remove `PORTAL_SETUP_TOKEN` from the Pages project when you are done and redeploy. While it is unset, that route responds as not found. Leave `PORTAL_PEPPER` in place. Login needs it.
 

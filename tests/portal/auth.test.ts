@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { before, describe, test } from "node:test";
 
@@ -7,7 +8,7 @@ import { dirname, join } from "node:path";
 
 import { onRequest as apexMiddleware } from "../../functions/_middleware";
 import { randomToken, sha256Hex } from "../../lib/portal/codec";
-import { countLoginFailuresForEmail } from "../../lib/portal/db";
+import { countLoginFailuresForEmail, countLoginFailuresForPair } from "../../lib/portal/db";
 import {
   getOwnerByEmail,
   getPasswordHash,
@@ -18,13 +19,14 @@ import {
 import { derivePortalKey, encodeDerived, PASSWORD_MIN_LENGTH, portalSalt, PORTAL_SALT_PREFIX } from "../../lib/portal/derive";
 import type { PortalEnv } from "../../lib/portal/env";
 import { handlePortal } from "../../lib/portal/handler";
+import { rateLimitIp } from "../../lib/portal/hosts";
 import {
   ATTEMPT_WINDOW_MS,
   EMAIL_FAILURE_LIMIT,
   PAIR_FAILURE_LIMIT,
 } from "../../lib/portal/login";
-import { macDerived, sealDerived, SERVER_AUTH_BUDGET_MS } from "../../lib/portal/mac";
-import { SESSION_COOKIE } from "../../lib/portal/session";
+import { decodeDerived, macDerived, sealDerived, SERVER_AUTH_BUDGET_MS } from "../../lib/portal/mac";
+import { DEVICE_COOKIE, SESSION_COOKIE } from "../../lib/portal/session";
 import { createMemoryD1 } from "./memory-d1";
 
 const PANAMERICA = "panamerica.cars@gmail.com";
@@ -226,6 +228,10 @@ describe("password login", { concurrency: 1 }, () => {
     });
     assert.equal(lockedPair.status, 429);
     assert.deepEqual(lockedPair.data, { error: "rate_limited" });
+    assert.equal(
+      await countLoginFailuresForPair(portal.DB!, PANAMERICA, pairIp, "1970-01-01T00:00:00.000Z"),
+      PAIR_FAILURE_LIMIT
+    );
 
     const otherIp = await login(portal, PANAMERICA, derivedPanamerica, "http://127.0.0.1", {
       "cf-connecting-ip": "203.0.113.11",
@@ -237,8 +243,16 @@ describe("password login", { concurrency: 1 }, () => {
     for (let i = 0; i < EMAIL_FAILURE_LIMIT; i++) {
       await insertLoginAttempt(emailPortal.DB!, PANAMERICA, `203.0.113.${i % 200}`, new Date().toISOString());
     }
-    const lockedEmail = await login(emailPortal, PANAMERICA, derivedPanamerica, "http://127.0.0.1", {
+    const cleanDuringFlood = await login(emailPortal, PANAMERICA, derivedPanamerica, "http://127.0.0.1", {
       "cf-connecting-ip": "192.0.2.55",
+    });
+    assert.equal(cleanDuringFlood.status, 200);
+    const noisyIp = "198.51.100.7";
+    for (let i = 0; i < 3; i++) {
+      await insertLoginAttempt(emailPortal.DB!, PANAMERICA, noisyIp, new Date().toISOString());
+    }
+    const lockedEmail = await login(emailPortal, PANAMERICA, derivedPanamerica, "http://127.0.0.1", {
+      "cf-connecting-ip": noisyIp,
     });
     assert.equal(lockedEmail.status, 429);
     assert.deepEqual(lockedEmail.data, lockedPair.data);
@@ -253,6 +267,131 @@ describe("password login", { concurrency: 1 }, () => {
       "cf-connecting-ip": "203.0.113.50",
     });
     assert.equal(allowed.status, 200);
+  });
+
+  test("one network cannot lock a clean network out of the public owner email", async () => {
+    const portal = env();
+    await updatePasswordHash(portal.DB!, 1, passwordHash);
+    const attacker = "203.0.113.8";
+    let unauthorized = 0;
+    let limited = 0;
+    for (let i = 0; i < 300; i++) {
+      const result = await login(portal, PANAMERICA, wrongDerived, "http://127.0.0.1", {
+        "cf-connecting-ip": attacker,
+      });
+      if (result.status === 401) unauthorized += 1;
+      else if (result.status === 429) limited += 1;
+    }
+    assert.equal(unauthorized, PAIR_FAILURE_LIMIT);
+    assert.equal(limited, 300 - PAIR_FAILURE_LIMIT);
+    assert.equal(
+      await countLoginFailuresForEmail(portal.DB!, PANAMERICA, "1970-01-01T00:00:00.000Z"),
+      PAIR_FAILURE_LIMIT
+    );
+    const clean = await login(portal, PANAMERICA, derivedPanamerica, "http://127.0.0.1", {
+      "cf-connecting-ip": "203.0.113.9",
+    });
+    assert.equal(clean.status, 200);
+  });
+
+  test("IPv6 failures share a /64 and a trusted device skips the email-wide cap", async () => {
+    const portal = env();
+    await updatePasswordHash(portal.DB!, 1, passwordHash);
+    const inside = "2001:db8:1:2::10";
+    const sibling = "2001:db8:1:2::abcd";
+    const elsewhere = "2001:db8:9:9::1";
+    assert.equal(rateLimitIp(inside), rateLimitIp(sibling));
+    assert.notEqual(rateLimitIp(inside), rateLimitIp(elsewhere));
+    assert.equal(rateLimitIp("203.0.113.10"), "203.0.113.10");
+    for (let i = 0; i < PAIR_FAILURE_LIMIT; i++) {
+      await insertLoginAttempt(portal.DB!, PANAMERICA, rateLimitIp(inside), new Date().toISOString());
+    }
+    const sameNet = await login(portal, PANAMERICA, derivedPanamerica, "http://127.0.0.1", {
+      "cf-connecting-ip": sibling,
+    });
+    assert.equal(sameNet.status, 429);
+    const otherNet = await login(portal, PANAMERICA, derivedPanamerica, "http://127.0.0.1", {
+      "cf-connecting-ip": elsewhere,
+    });
+    assert.equal(otherNet.status, 200);
+    const device = otherNet.setCookie.find((cookie) => cookie.startsWith(`${DEVICE_COOKIE}=`));
+    assert.ok(device);
+    assert.match(device, /HttpOnly/);
+    assert.match(device, /Secure/);
+    assert.match(device, /SameSite=Lax/);
+    assert.doesNotMatch(device, /Domain=/i);
+
+    const home = "198.51.100.40";
+    for (let i = 0; i < EMAIL_FAILURE_LIMIT; i++) {
+      await insertLoginAttempt(portal.DB!, PANAMERICA, `198.51.100.${(i % 50) + 1}`, new Date().toISOString());
+    }
+    for (let i = 0; i < 3; i++) {
+      await insertLoginAttempt(portal.DB!, PANAMERICA, home, new Date().toISOString());
+    }
+    const blocked = await login(portal, PANAMERICA, derivedPanamerica, "http://127.0.0.1", {
+      "cf-connecting-ip": home,
+    });
+    assert.equal(blocked.status, 429);
+    const trusted = await login(portal, PANAMERICA, derivedPanamerica, "http://127.0.0.1", {
+      cookie: device.split(";")[0],
+      "cf-connecting-ip": home,
+    });
+    assert.equal(trusted.status, 200);
+  });
+
+  test("login and setup fail closed without a long pepper", async () => {
+    const short = randomBytes(16).toString("hex").slice(0, 31);
+    const usable = randomBytes(24).toString("base64url");
+    assert.equal(short.length, 31);
+    assert.ok(usable.length >= 32);
+    for (const value of [undefined, "", short] as const) {
+      const portal = env({ PORTAL_PEPPER: value, PORTAL_SETUP_TOKEN: randomBytes(24).toString("base64url") });
+      const signed = await login(portal, PANAMERICA, derivedPanamerica);
+      assert.equal(signed.status, 500);
+      assert.deepEqual(signed.data, { error: "auth_unconfigured" });
+      const setup = await send(portal, "POST", "/api/portal/setup-password", {
+        body: { email: PANAMERICA, derived: derivedPanamerica },
+        headers: { "x-portal-setup-token": portal.PORTAL_SETUP_TOKEN ?? "" },
+      });
+      assert.equal(setup.status, 500);
+      assert.deepEqual(setup.data, { error: "auth_unconfigured" });
+    }
+    const bytes = decodeDerived(derivedPanamerica);
+    assert.ok(bytes);
+    const portal = env({ PORTAL_PEPPER: usable });
+    await updatePasswordHash(portal.DB!, 1, await sealDerived(usable, bytes));
+    assert.equal((await login(portal, PANAMERICA, derivedPanamerica)).status, 200);
+  });
+
+  test("the setup script reads a piped password and prints the derived key", async () => {
+    const secret = randomBytes(18).toString("base64url");
+    const stdout = await new Promise<string>((resolve, reject) => {
+      const child = spawn(process.execPath, ["--import", "tsx", "scripts/portal-setup-body.mts", PANAMERICA], {
+        cwd: process.cwd(),
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+      let out = "";
+      let err = "";
+      child.stdout.on("data", (chunk: Buffer) => {
+        out += chunk.toString("utf8");
+      });
+      child.stderr.on("data", (chunk: Buffer) => {
+        err += chunk.toString("utf8");
+      });
+      child.on("error", reject);
+      child.on("close", (code) => {
+        if (code === 0) resolve(out);
+        else reject(new Error(err || `exit ${code}`));
+      });
+      child.stdin.end(secret);
+    });
+    const body = JSON.parse(stdout) as { email?: string; derived?: string; password?: string };
+    assert.equal(body.email, PANAMERICA);
+    assert.equal(body.password, undefined);
+    assert.equal(stdout.includes(secret), false);
+    const decoded = decodeDerived(body.derived);
+    assert.equal(decoded?.length, 32);
+    assert.equal(body.derived, encodeDerived(await derivePortalKey(PANAMERICA, secret)));
   });
 
   test("pages.dev rejects login and ignores an existing session", async () => {

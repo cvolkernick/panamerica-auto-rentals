@@ -2,8 +2,11 @@ import { randomToken } from "./codec";
 
 /** __Host- forbids a Domain attribute. Portal paths on the apex redirect to www. */
 export const SESSION_COOKIE = "__Host-portal_session";
+/** Set after a successful login so that browser can skip the email-wide failure cap. */
+export const DEVICE_COOKIE = "__Host-portal_device";
 export const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const SESSION_MAX_AGE_SECONDS = Math.floor(SESSION_TTL_MS / 1000);
+export const DEVICE_MAX_AGE_SECONDS = 90 * 24 * 60 * 60;
 
 export function sessionCookie(token: string, maxAge = SESSION_MAX_AGE_SECONDS): string {
   return `${SESSION_COOKIE}=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${maxAge}`;
@@ -11,6 +14,10 @@ export function sessionCookie(token: string, maxAge = SESSION_MAX_AGE_SECONDS): 
 
 export function clearSessionCookie(): string {
   return `${SESSION_COOKIE}=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0`;
+}
+
+export function deviceCookie(token: string): string {
+  return `${DEVICE_COOKIE}=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${DEVICE_MAX_AGE_SECONDS}`;
 }
 
 export function readCookie(request: Request, name: string): string | null {

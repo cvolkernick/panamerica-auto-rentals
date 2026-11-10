@@ -86,5 +86,8 @@ test("owner portal docs do not recommend a paid worker plan", () => {
   assert.doesNotMatch(docs, /Workers Paid/i);
   assert.doesNotMatch(docs, /Workers Standard/i);
   assert.match(docs, /--data @-/);
+  assert.match(docs, /read -s/);
+  assert.match(docs, /scripts\/portal-setup-body\.mts/);
+  assert.equal(existsSync("scripts/portal-setup-body.ts"), false);
   assert.doesNotMatch(docs, /password":"'"/);
 });

@@ -1,4 +1,4 @@
-import { sha256Hex } from "./codec";
+import { base64UrlEncode, sha256Hex } from "./codec";
 import {
   countLoginFailuresForEmail,
   countLoginFailuresForPair,
@@ -28,11 +28,13 @@ import {
   unauthorized,
   validationError,
 } from "./http";
-import { configuredPepper, decodeDerived, macMatches, sealDerived } from "./mac";
+import { configuredPepper, decodeDerived, macDerived, macMatches, sealDerived } from "./mac";
 import { secretsEqual } from "./secrets";
 import {
   applyCookies,
   clearSessionCookie,
+  DEVICE_COOKIE,
+  deviceCookie,
   newSessionSecrets,
   readCookie,
   SESSION_COOKIE,
@@ -41,10 +43,12 @@ import {
 } from "./session";
 import type { PortalAuth } from "./types";
 
-/** Failed attempts for one email from one IP. Successes are not counted. */
+/** Failed attempts for one email from one IPv4 address or IPv6 /64. Successes and 429s are not counted. */
 export const PAIR_FAILURE_LIMIT = 20;
-/** Email-wide cap, high enough that strangers cannot lock the public address. */
+/** Email-wide cap. It applies only to a network that already failed recently. */
 export const EMAIL_FAILURE_LIMIT = 200;
+/** An address below this many recent failures is not subject to the email-wide cap. */
+export const EMAIL_CAP_OWN_FAILURES = 3;
 export const ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
 const INVALID_ATTEMPT_EMAIL = "invalid";
 const SETUP_ATTEMPT_EMAIL = "setup";
@@ -70,17 +74,32 @@ export async function requireCsrf(
   return null;
 }
 
-async function overFailureLimit(
+async function deviceToken(pepper: string, email: string): Promise<string> {
+  const mac = await macDerived(pepper, new TextEncoder().encode(`device\0${email}`));
+  return base64UrlEncode(mac);
+}
+
+async function trustedDevice(request: Request, pepper: string, email: string): Promise<boolean> {
+  const presented = readCookie(request, DEVICE_COOKIE);
+  if (!presented) return false;
+  return secretsEqual(presented, await deviceToken(pepper, email));
+}
+
+/** Pair cap always applies. The email-wide cap does not apply to a clean network or a trusted device. */
+async function loginLimited(
   db: PortalD1,
+  request: Request,
+  pepper: string,
   email: string,
   ip: string,
   cutoffIso: string
 ): Promise<boolean> {
-  const [pair, byEmail] = await Promise.all([
-    countLoginFailuresForPair(db, email, ip, cutoffIso),
-    countLoginFailuresForEmail(db, email, cutoffIso),
-  ]);
-  return pair >= PAIR_FAILURE_LIMIT || byEmail >= EMAIL_FAILURE_LIMIT;
+  const pair = await countLoginFailuresForPair(db, email, ip, cutoffIso);
+  if (pair >= PAIR_FAILURE_LIMIT) return true;
+  if (pair < EMAIL_CAP_OWN_FAILURES) return false;
+  if (await trustedDevice(request, pepper, email)) return false;
+  const byEmail = await countLoginFailuresForEmail(db, email, cutoffIso);
+  return byEmail >= EMAIL_FAILURE_LIMIT;
 }
 
 async function recordFailure(db: PortalD1, email: string, ip: string, nowIso: string): Promise<void> {
@@ -163,8 +182,7 @@ export async function handleLogin(
   const nowIso = now.toISOString();
   const cutoff = new Date(now.getTime() - ATTEMPT_WINDOW_MS).toISOString();
   await deleteOldLoginAttempts(db, cutoff);
-  if (await overFailureLimit(db, attemptEmail, ip, cutoff)) {
-    await recordFailure(db, attemptEmail, ip, nowIso);
+  if (await loginLimited(db, request, pepper, attemptEmail, ip, cutoff)) {
     return rateLimited();
   }
 
@@ -193,7 +211,10 @@ export async function handleLogin(
     owner: ownerJson(owner, env),
     csrfToken: secrets.csrfToken,
   });
-  return applyCookies(response, [sessionCookie(secrets.token)]);
+  return applyCookies(response, [
+    sessionCookie(secrets.token),
+    deviceCookie(await deviceToken(pepper, owner.email.trim().toLowerCase())),
+  ]);
 }
 
 export async function handleLogout(
@@ -236,8 +257,7 @@ export async function handleSetupPassword(
   const nowIso = now.toISOString();
   const cutoff = new Date(now.getTime() - ATTEMPT_WINDOW_MS).toISOString();
   await deleteOldLoginAttempts(db, cutoff);
-  if (await overFailureLimit(db, SETUP_ATTEMPT_EMAIL, ip, cutoff)) {
-    await recordFailure(db, SETUP_ATTEMPT_EMAIL, ip, nowIso);
+  if ((await countLoginFailuresForPair(db, SETUP_ATTEMPT_EMAIL, ip, cutoff)) >= PAIR_FAILURE_LIMIT) {
     return rateLimited();
   }
 
