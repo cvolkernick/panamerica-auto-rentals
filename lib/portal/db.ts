@@ -293,6 +293,21 @@ export async function countLoginFailuresForEmail(
   return Number(row?.n ?? 0);
 }
 
+export async function countLoginFailuresForIpv6Prefix(
+  db: PortalD1,
+  email: string,
+  prefix48: string,
+  cutoffIso: string
+): Promise<number> {
+  const row = await db
+    .prepare(
+      `SELECT COUNT(*) AS n FROM login_attempts WHERE email = ? AND ip LIKE ? ESCAPE '\\' AND created_at > ?`
+    )
+    .bind(email, `${prefix48.replace(/[\\%_]/g, "\\$&")}:%`, cutoffIso)
+    .first<{ n: number }>();
+  return Number(row?.n ?? 0);
+}
+
 export async function countLoginFailuresForPair(
   db: PortalD1,
   email: string,

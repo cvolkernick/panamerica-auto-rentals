@@ -24,6 +24,7 @@ import {
   ATTEMPT_WINDOW_MS,
   EMAIL_FAILURE_LIMIT,
   PAIR_FAILURE_LIMIT,
+  PREFIX48_FAILURE_LIMIT,
 } from "../../lib/portal/login";
 import { decodeDerived, macDerived, sealDerived, SERVER_AUTH_BUDGET_MS } from "../../lib/portal/mac";
 import { DEVICE_COOKIE, SESSION_COOKIE } from "../../lib/portal/session";
@@ -292,6 +293,29 @@ describe("password login", { concurrency: 1 }, () => {
       "cf-connecting-ip": "203.0.113.9",
     });
     assert.equal(clean.status, 200);
+  });
+
+  test("many /64s in one /48 cannot exceed the /48 cap", async () => {
+    const portal = env();
+    await updatePasswordHash(portal.DB!, 1, passwordHash);
+    for (let i = 0; i < PREFIX48_FAILURE_LIMIT; i++) {
+      const result = await login(portal, PANAMERICA, wrongDerived, "http://127.0.0.1", {
+        "cf-connecting-ip": `2001:db8:10:${i.toString(16)}::1`,
+      });
+      assert.equal(result.status, 401);
+    }
+    const blocked = await login(portal, PANAMERICA, derivedPanamerica, "http://127.0.0.1", {
+      "cf-connecting-ip": `2001:db8:10:${PREFIX48_FAILURE_LIMIT.toString(16)}::1`,
+    });
+    assert.equal(blocked.status, 429);
+    assert.equal(
+      await countLoginFailuresForEmail(portal.DB!, PANAMERICA, "1970-01-01T00:00:00.000Z"),
+      PREFIX48_FAILURE_LIMIT
+    );
+    const other = await login(portal, PANAMERICA, derivedPanamerica, "http://127.0.0.1", {
+      "cf-connecting-ip": "2001:db8:11::1",
+    });
+    assert.equal(other.status, 200);
   });
 
   test("IPv6 failures share a /64 and a trusted device skips the email-wide cap", async () => {

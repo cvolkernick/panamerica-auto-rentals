@@ -139,6 +139,13 @@ export function rateLimitIp(raw: string): string {
   return prefix ? `${prefix}::/64` : "unknown";
 }
 
+/** /48 of an IPv6 rate-limit key. IPv4 and unknown keys have none. */
+export function ipv6Prefix48(rateKey: string): string | null {
+  const match = /^([0-9a-f]+):([0-9a-f]+):([0-9a-f]+):[0-9a-f]+::\/64$/.exec(rateKey);
+  if (!match) return null;
+  return `${match[1]}:${match[2]}:${match[3]}`;
+}
+
 export function clientIp(request: Request): string {
   const cf = request.headers.get("cf-connecting-ip")?.trim() ?? "";
   if (!cf) return "unknown";

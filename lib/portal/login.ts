@@ -1,6 +1,7 @@
 import { base64UrlEncode, sha256Hex } from "./codec";
 import {
   countLoginFailuresForEmail,
+  countLoginFailuresForIpv6Prefix,
   countLoginFailuresForPair,
   deleteExpiredSessions,
   deleteOldLoginAttempts,
@@ -18,7 +19,7 @@ import {
 import type { PortalD1 } from "./d1";
 import { normalizeLoginEmail } from "./email";
 import type { PortalEnv } from "./env";
-import { clientIp, devAuthEmail, originAllowed, requestHost, sessionHostAllowed } from "./hosts";
+import { clientIp, devAuthEmail, ipv6Prefix48, originAllowed, requestHost, sessionHostAllowed } from "./hosts";
 import {
   forbidden,
   INVALID_CREDENTIALS,
@@ -49,6 +50,8 @@ export const PAIR_FAILURE_LIMIT = 20;
 export const EMAIL_FAILURE_LIMIT = 200;
 /** An address below this many recent failures is not subject to the email-wide cap. */
 export const EMAIL_CAP_OWN_FAILURES = 3;
+/** Failed attempts for one email inside one IPv6 /48, across its /64s. */
+export const PREFIX48_FAILURE_LIMIT = 60;
 export const ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
 const INVALID_ATTEMPT_EMAIL = "invalid";
 const SETUP_ATTEMPT_EMAIL = "setup";
@@ -96,6 +99,11 @@ async function loginLimited(
 ): Promise<boolean> {
   const pair = await countLoginFailuresForPair(db, email, ip, cutoffIso);
   if (pair >= PAIR_FAILURE_LIMIT) return true;
+  const prefix48 = ipv6Prefix48(ip);
+  if (prefix48) {
+    const inNetwork = await countLoginFailuresForIpv6Prefix(db, email, prefix48, cutoffIso);
+    if (inNetwork >= PREFIX48_FAILURE_LIMIT) return true;
+  }
   if (pair < EMAIL_CAP_OWN_FAILURES) return false;
   if (await trustedDevice(request, pepper, email)) return false;
   const byEmail = await countLoginFailuresForEmail(db, email, cutoffIso);
