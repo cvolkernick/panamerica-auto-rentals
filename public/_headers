@@ -3,3 +3,19 @@
 /plans/*.pdf
   Content-Type: application/pdf
   X-Content-Type-Options: nosniff
+
+/owner/
+  X-Robots-Tag: noindex
+
+/owner/*
+  X-Robots-Tag: noindex
+
+/admin/
+  X-Robots-Tag: noindex
+
+/admin/*
+  X-Robots-Tag: noindex
+
+/api/portal/*
+  X-Robots-Tag: noindex
+  X-Content-Type-Options: nosniff

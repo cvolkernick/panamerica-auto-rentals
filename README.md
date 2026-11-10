@@ -2,7 +2,7 @@
 
 Public marketing site for **Panamerica Auto Rentals**, the trade name of **Panamerica Auto, LLC** — a Florida LLC that rents vehicles by the day, week, or month to individuals and gig drivers in Fort Myers and Cape Coral, with fleet partner programs for vehicle owners.
 
-Dark-mode Next.js App Router site. No booking engine, payments, or auth.
+Dark-mode Next.js App Router site. No booking engine and no payments. The signed-in owner portal (`/owner`, `/admin`) is separate from the public pages. It is not linked from the nav, footer, or sitemap. Setup is in `docs/owner-portal.md`.
 
 ## Run locally
 
