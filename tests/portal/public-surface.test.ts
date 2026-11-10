@@ -43,3 +43,25 @@ test("portal pages ask robots not to index", () => {
     assert.match(source(path), /noindex/);
   }
 });
+
+test("login is the signed-out portal shell and access jwt config is gone", () => {
+  assert.match(source("components/portal/ui.tsx"), /type="password"/);
+  assert.match(source("components/portal/ui.tsx"), /Log out/);
+  assert.match(source("app/owner/owner-portal.tsx"), /PortalLogin/);
+  assert.match(source("app/admin/admin-portal.tsx"), /PortalLogin/);
+  assert.equal(existsSync("lib/portal/access.ts"), false);
+  assert.doesNotMatch(source("app/sitemap.ts"), /login/);
+  for (const path of [
+    "docs/owner-portal.md",
+    ".env.example",
+    "lib/portal/env.ts",
+    "lib/portal/handler.ts",
+    "package.json",
+  ]) {
+    assert.doesNotMatch(source(path), /CF_ACCESS/);
+    assert.doesNotMatch(source(path), /Cf-Access-Jwt/);
+  }
+  assert.doesNotMatch(source("package.json"), /"jose"/);
+  assert.doesNotMatch(source("migrations/0001_init.sql"), /password_hash/);
+  assert.doesNotMatch(source("migrations/0002_auth.sql"), /\$argon2id\$v=/);
+});

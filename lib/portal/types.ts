@@ -27,6 +27,14 @@ export type CarJson = {
 export type SessionJson = {
   email: string;
   owner: OwnerJson;
+  csrfToken: string;
+};
+
+export type PortalAuth = {
+  email: string;
+  owner: OwnerJson;
+  csrfToken: string;
+  devBypass: boolean;
 };
 
 export type PortalErrorJson = {

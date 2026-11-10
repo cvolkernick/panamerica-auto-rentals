@@ -6,9 +6,10 @@ import { useEffect, useState } from "react";
 import { portalRequest } from "@/components/portal/api";
 import {
   PortalForbidden,
+  PortalLogin,
+  PortalLogout,
   PortalNotice,
   PortalShell,
-  PortalSignedOut,
 } from "@/components/portal/ui";
 import type { CarJson, SessionJson } from "@/lib/portal/types";
 
@@ -52,6 +53,7 @@ function CarFacts({ car }: { car: CarJson }) {
 
 export function OwnerPortal() {
   const [gate, setGate] = useState<Gate>({ kind: "loading" });
+  const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -89,9 +91,11 @@ export function OwnerPortal() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reloadToken]);
 
-  if (gate.kind === "signed-out") return <PortalSignedOut />;
+  if (gate.kind === "signed-out") {
+    return <PortalLogin onSuccess={() => setReloadToken((value) => value + 1)} />;
+  }
   if (gate.kind === "forbidden") return <PortalForbidden email={gate.email} />;
   if (gate.kind === "loading") {
     return (
@@ -129,6 +133,7 @@ export function OwnerPortal() {
           ) : null}
         </>
       }
+      actions={<PortalLogout onDone={() => setReloadToken((value) => value + 1)} />}
     >
       {gate.cars.length === 0 ? (
         <p className="mt-10 text-base leading-relaxed text-white/70">No cars yet.</p>

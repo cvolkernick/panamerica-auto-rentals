@@ -9,9 +9,10 @@ import { Input } from "@/components/ui/input";
 import {
   PortalField,
   PortalForbidden,
+  PortalLogin,
+  PortalLogout,
   PortalNotice,
   PortalShell,
-  PortalSignedOut,
   portalInputClass,
 } from "@/components/portal/ui";
 import type { CarJson, OwnerJson, PortalErrorJson, SessionJson } from "@/lib/portal/types";
@@ -195,7 +196,9 @@ export function AdminPortal() {
     setReloadToken((value) => value + 1);
   }
 
-  if (gate.kind === "signed-out") return <PortalSignedOut />;
+  if (gate.kind === "signed-out") {
+    return <PortalLogin onSuccess={() => setReloadToken((value) => value + 1)} />;
+  }
   if (gate.kind === "forbidden") return <PortalForbidden email={gate.email} />;
   if (gate.kind === "not-admin") {
     return (
@@ -204,12 +207,15 @@ export function AdminPortal() {
           {email ? <>Signed in as {email}. </> : null}
           This login is not an admin.
         </p>
-        <Link
-          href="/owner/"
-          className="mt-4 inline-block font-heading text-sm tracking-[0.16em] text-gold uppercase hover:text-white"
-        >
-          Your cars
-        </Link>
+        <div className="mt-6 flex flex-wrap items-center gap-4">
+          <Link
+            href="/owner/"
+            className="font-heading text-sm tracking-[0.16em] text-gold uppercase hover:text-white"
+          >
+            Your cars
+          </Link>
+          <PortalLogout onDone={() => setReloadToken((value) => value + 1)} />
+        </div>
       </PortalShell>
     );
   }
@@ -241,6 +247,7 @@ export function AdminPortal() {
           .
         </>
       }
+      actions={<PortalLogout onDone={() => setReloadToken((value) => value + 1)} />}
     >
       {message ? <PortalNotice>{message}</PortalNotice> : null}
 

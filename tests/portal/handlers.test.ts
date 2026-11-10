@@ -1,47 +1,23 @@
 import assert from "node:assert/strict";
-import { before, describe, test } from "node:test";
+import { describe, test } from "node:test";
 
-import { generateKeyPair, SignJWT, exportJWK, type CryptoKey } from "jose";
-
-import { clearAccessJwksCache } from "../../lib/portal/access";
 import { OWNER_CAR_BY_ID_SQL, OWNER_CARS_SQL } from "../../lib/portal/db";
-import { handlePortal, type PortalDeps } from "../../lib/portal/handler";
+import { handlePortal } from "../../lib/portal/handler";
 import type { PortalEnv } from "../../lib/portal/env";
 import { maxCarYear } from "../../lib/portal/validate";
 import { onRequest } from "../../functions/api/portal/[[path]]";
 import { createMemoryD1, loadMigrationSql } from "./memory-d1";
 
-const TEAM = "panamerica.cloudflareaccess.com";
-const AUD = "portal-aud-tag";
-const ISSUER = `https://${TEAM}`;
 const PANAMERICA = "panamerica.cars@gmail.com";
 const DEALER = "dealer.partner@example.com";
 const VIN_A = "1TSTCAR0000000001";
 const VIN_B = "2TSTCAR0000000002";
-
-let publicKey: CryptoKey;
-let privateKey: CryptoKey;
-
-before(async () => {
-  const keys = await generateKeyPair("RS256");
-  publicKey = keys.publicKey;
-  privateKey = keys.privateKey;
-});
 
 function devEnv(email: string, extra: Partial<PortalEnv> = {}): PortalEnv {
   return {
     DB: createMemoryD1(),
     PORTAL_DEV_AUTH: "1",
     PORTAL_DEV_EMAIL: email,
-    ...extra,
-  };
-}
-
-function accessEnv(extra: Partial<PortalEnv> = {}): PortalEnv {
-  return {
-    DB: createMemoryD1(),
-    CF_ACCESS_TEAM_DOMAIN: TEAM,
-    CF_ACCESS_AUD: AUD,
     ...extra,
   };
 }
@@ -58,7 +34,6 @@ function request(
 ): Request {
   const headers = new Headers(options.headers);
   if (options.body !== undefined) headers.set("content-type", "application/json");
-  if (options.token) headers.set("cf-access-jwt-assertion", options.token);
   return new Request(`${options.host ?? "http://127.0.0.1"}${path}`, {
     method,
     headers,
@@ -71,15 +46,9 @@ async function call(
   method: string,
   path: string,
   body?: unknown,
-  deps?: PortalDeps,
-  host?: string,
-  token?: string
+  host?: string
 ) {
-  const response = await handlePortal(
-    request(method, path, { body, host, token }),
-    env,
-    deps
-  );
+  const response = await handlePortal(request(method, path, { body, host }), env);
   const text = await response.text();
   return {
     status: response.status,
@@ -101,31 +70,6 @@ function carBody(overrides: Record<string, unknown> = {}) {
   };
 }
 
-async function tokenFor(
-  email: string,
-  overrides: {
-    audience?: string | string[];
-    issuer?: string;
-    expiresIn?: string | number;
-    emailClaim?: unknown;
-    omitEmail?: boolean;
-    key?: CryptoKey;
-  } = {}
-) {
-  const claims: Record<string, unknown> = {};
-  if (!overrides.omitEmail) {
-    claims.email = overrides.emailClaim === undefined ? email : overrides.emailClaim;
-  }
-  return new SignJWT(claims)
-    .setProtectedHeader({ alg: "RS256", kid: "test-kid" })
-    .setIssuer(overrides.issuer ?? ISSUER)
-    .setAudience(overrides.audience ?? AUD)
-    .setSubject("user-test")
-    .setIssuedAt()
-    .setExpirationTime(overrides.expiresIn ?? "10m")
-    .sign(overrides.key ?? privateKey);
-}
-
 describe("migration seed", () => {
   test("seeds only the Panamerica owner and no cars", async () => {
     const sql = loadMigrationSql();
@@ -134,6 +78,14 @@ describe("migration seed", () => {
     assert.match(sql, /is_admin/);
     assert.doesNotMatch(sql, /INSERT INTO cars/i);
     assert.equal(sql.match(/INSERT INTO owners/gi)?.length, 1);
+
+    const authSql = loadMigrationSql("0002_auth.sql");
+    assert.match(authSql, /password_hash/);
+    assert.match(authSql, /CREATE TABLE sessions/);
+    assert.match(authSql, /CREATE TABLE login_attempts/);
+    assert.doesNotMatch(authSql, /INSERT\s+INTO/i);
+    assert.doesNotMatch(authSql, /\$argon2/i);
+    assert.doesNotMatch(authSql, /\$2[aby]\$/i);
 
     const env = devEnv(PANAMERICA);
     const session = await call(env, "GET", "/api/portal/session");
@@ -156,123 +108,8 @@ describe("migration seed", () => {
 });
 
 describe("auth mapping", () => {
-  test("a valid Access JWT maps to the seeded owner", async () => {
-    const env = accessEnv();
-    const token = await tokenFor(PANAMERICA);
-    const result = await call(env, "GET", "/api/portal/session", undefined, { jwtKey: publicKey }, undefined, token);
-    assert.equal(result.status, 200);
-    assert.equal((result.data?.owner as { email: string }).email, PANAMERICA);
-    assert.equal(result.data?.email, PANAMERICA);
-  });
-
-  test("JWT email case still maps to the owner row", async () => {
-    const env = accessEnv();
-    const token = await tokenFor(PANAMERICA, { emailClaim: "Panamerica.Cars@gmail.com" });
-    const result = await call(env, "GET", "/api/portal/session", undefined, { jwtKey: publicKey }, undefined, token);
-    assert.equal(result.status, 200);
-    assert.equal(result.data?.email, PANAMERICA);
-  });
-
-  test("an unknown email with a valid JWT gets 403 and no car data", async () => {
-    const env = accessEnv();
-    const token = await tokenFor("stranger@example.com");
-    const result = await call(env, "GET", "/api/portal/cars", undefined, { jwtKey: publicKey }, undefined, token);
-    assert.equal(result.status, 403);
-    assert.equal(result.data?.reason, "unknown_email");
-    assert.equal(result.data?.email, "stranger@example.com");
-    assert.equal(result.text.includes(VIN_A), false);
-    assert.equal("cars" in (result.data ?? {}), false);
-  });
-
-  test("missing, expired, wrong-audience, and bad-signature tokens are 401", async () => {
-    const env = accessEnv();
-    const missing = await call(env, "GET", "/api/portal/session", undefined, { jwtKey: publicKey });
-    assert.equal(missing.status, 401);
-
-    const expired = await call(
-      env,
-      "GET",
-      "/api/portal/session",
-      undefined,
-      { jwtKey: publicKey },
-      undefined,
-      await tokenFor(PANAMERICA, { expiresIn: "-10m" })
-    );
-    assert.equal(expired.status, 401);
-
-    const wrongAud = await call(
-      env,
-      "GET",
-      "/api/portal/session",
-      undefined,
-      { jwtKey: publicKey },
-      undefined,
-      await tokenFor(PANAMERICA, { audience: "other-aud" })
-    );
-    assert.equal(wrongAud.status, 401);
-
-    const other = await generateKeyPair("RS256");
-    const badSig = await call(
-      env,
-      "GET",
-      "/api/portal/session",
-      undefined,
-      { jwtKey: publicKey },
-      undefined,
-      await tokenFor(PANAMERICA, { key: other.privateKey })
-    );
-    assert.equal(badSig.status, 401);
-
-    const noEmail = await call(
-      env,
-      "GET",
-      "/api/portal/session",
-      undefined,
-      { jwtKey: publicKey },
-      undefined,
-      await tokenFor(PANAMERICA, { omitEmail: true })
-    );
-    assert.equal(noEmail.status, 401);
-  });
-
-  test("Access certs are fetched from the team domain when no test key is injected", async () => {
-    const jwk = await exportJWK(publicKey);
-    jwk.alg = "RS256";
-    jwk.use = "sig";
-    jwk.kid = "test-kid";
-    const original = globalThis.fetch;
-    let requested = "";
-    globalThis.fetch = async (input: RequestInfo | URL) => {
-      requested = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
-      return new Response(JSON.stringify({ keys: [jwk] }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
-    };
-    try {
-      clearAccessJwksCache();
-      const env = accessEnv({ CF_ACCESS_TEAM_DOMAIN: "https://jwks-test.cloudflareaccess.com" });
-      const signed = await new SignJWT({ email: PANAMERICA })
-        .setProtectedHeader({ alg: "RS256", kid: "test-kid" })
-        .setIssuer("https://jwks-test.cloudflareaccess.com")
-        .setAudience(AUD)
-        .setIssuedAt()
-        .setExpirationTime("10m")
-        .sign(privateKey);
-      const response = await handlePortal(
-        request("GET", "/api/portal/session", { token: signed }),
-        env
-      );
-      assert.equal(response.status, 200);
-      assert.equal(requested, "https://jwks-test.cloudflareaccess.com/cdn-cgi/access/certs");
-    } finally {
-      globalThis.fetch = original;
-      clearAccessJwksCache();
-    }
-  });
-
   test("dev bypass is off unless the flag is exactly 1 and the host is local", async () => {
-    const withEmailOnly = accessEnv({ PORTAL_DEV_EMAIL: PANAMERICA });
+    const withEmailOnly: PortalEnv = { DB: createMemoryD1(), PORTAL_DEV_EMAIL: PANAMERICA };
     assert.equal((await call(withEmailOnly, "GET", "/api/portal/session")).status, 401);
 
     assert.equal(
@@ -285,17 +122,24 @@ describe("auth mapping", () => {
       "GET",
       "/api/portal/session",
       undefined,
-      undefined,
       "https://www.panamericafleet.com"
     );
     assert.equal(production.status, 401);
-    assert.equal(production.data?.reason, "access_not_configured");
+    assert.equal(production.data?.error, "unauthorized");
+
+    const apex = await call(
+      devEnv(PANAMERICA),
+      "GET",
+      "/api/portal/session",
+      undefined,
+      "https://panamericafleet.com"
+    );
+    assert.equal(apex.status, 308);
 
     const pages = await call(
       devEnv(PANAMERICA),
       "GET",
       "/api/portal/session",
-      undefined,
       undefined,
       "https://panamerica.pages.dev"
     );
@@ -303,22 +147,6 @@ describe("auth mapping", () => {
 
     const local = await call(devEnv(PANAMERICA), "GET", "/api/portal/session");
     assert.equal(local.status, 200);
-  });
-
-  test("on a locked host a real JWT still works when the dev flag is set", async () => {
-    const env = accessEnv({ PORTAL_DEV_AUTH: "1", PORTAL_DEV_EMAIL: DEALER });
-    const token = await tokenFor(PANAMERICA);
-    const result = await call(
-      env,
-      "GET",
-      "/api/portal/session",
-      undefined,
-      { jwtKey: publicKey },
-      "https://www.panamericafleet.com",
-      token
-    );
-    assert.equal(result.status, 200);
-    assert.equal(result.data?.email, PANAMERICA);
   });
 
   test("the Pages function delegates to the portal handler", async () => {

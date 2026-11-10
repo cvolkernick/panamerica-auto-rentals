@@ -11,6 +11,12 @@ export function unauthorized(reason?: string): Response {
   return json(reason ? { error: "unauthorized", reason } : { error: "unauthorized" }, 401);
 }
 
+export function rateLimited(): Response {
+  return json({ error: "rate_limited" }, 429);
+}
+
+export const INVALID_CREDENTIALS = { error: "invalid_credentials" } as const;
+
 export function forbidden(reason: string, email?: string): Response {
   return json(
     email ? { error: "forbidden", reason, email } : { error: "forbidden", reason },

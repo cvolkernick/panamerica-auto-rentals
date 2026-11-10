@@ -204,6 +204,97 @@ export async function deleteCar(db: PortalD1, id: number): Promise<void> {
   await db.prepare(`DELETE FROM cars WHERE id = ?`).bind(id).run();
 }
 
+export async function getPasswordHash(db: PortalD1, ownerId: number): Promise<string | null> {
+  const row = await db
+    .prepare(`SELECT password_hash FROM owners WHERE id = ?`)
+    .bind(ownerId)
+    .first<{ password_hash: string | null }>();
+  const hash = row?.password_hash;
+  return typeof hash === "string" && hash.length > 0 ? hash : null;
+}
+
+export async function updatePasswordHash(
+  db: PortalD1,
+  ownerId: number,
+  passwordHash: string
+): Promise<void> {
+  await db
+    .prepare(`UPDATE owners SET password_hash = ? WHERE id = ?`)
+    .bind(passwordHash, ownerId)
+    .run();
+}
+
+export type SessionRow = {
+  owner_id: number;
+  csrf_secret: string;
+  expires_at: string;
+};
+
+export async function insertSession(
+  db: PortalD1,
+  idHash: string,
+  ownerId: number,
+  csrfSecret: string,
+  expiresAt: string,
+  createdAt: string
+): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO sessions (id_hash, owner_id, csrf_secret, expires_at, created_at) VALUES (?, ?, ?, ?, ?)`
+    )
+    .bind(idHash, ownerId, csrfSecret, expiresAt, createdAt)
+    .run();
+}
+
+export async function getSessionByHash(db: PortalD1, idHash: string): Promise<SessionRow | null> {
+  return db
+    .prepare(`SELECT owner_id, csrf_secret, expires_at FROM sessions WHERE id_hash = ?`)
+    .bind(idHash)
+    .first<SessionRow>();
+}
+
+export async function deleteSessionByHash(db: PortalD1, idHash: string): Promise<void> {
+  await db.prepare(`DELETE FROM sessions WHERE id_hash = ?`).bind(idHash).run();
+}
+
+export async function deleteSessionsForOwner(db: PortalD1, ownerId: number): Promise<void> {
+  await db.prepare(`DELETE FROM sessions WHERE owner_id = ?`).bind(ownerId).run();
+}
+
+export async function deleteExpiredSessions(db: PortalD1, nowIso: string): Promise<void> {
+  await db.prepare(`DELETE FROM sessions WHERE expires_at <= ?`).bind(nowIso).run();
+}
+
+export async function insertLoginAttempt(
+  db: PortalD1,
+  email: string,
+  ip: string,
+  createdAt: string
+): Promise<void> {
+  await db
+    .prepare(`INSERT INTO login_attempts (email, ip, created_at) VALUES (?, ?, ?)`)
+    .bind(email, ip, createdAt)
+    .run();
+}
+
+export async function deleteOldLoginAttempts(db: PortalD1, cutoffIso: string): Promise<void> {
+  await db.prepare(`DELETE FROM login_attempts WHERE created_at <= ?`).bind(cutoffIso).run();
+}
+
+export async function countLoginAttempts(
+  db: PortalD1,
+  column: "email" | "ip",
+  value: string,
+  cutoffIso: string
+): Promise<number> {
+  const sql =
+    column === "email"
+      ? `SELECT COUNT(*) AS n FROM login_attempts WHERE email = ? AND created_at > ?`
+      : `SELECT COUNT(*) AS n FROM login_attempts WHERE ip = ? AND created_at > ?`;
+  const row = await db.prepare(sql).bind(value, cutoffIso).first<{ n: number }>();
+  return Number(row?.n ?? 0);
+}
+
 export function uniqueField(error: unknown): "vin" | "email" | null {
   const message = error instanceof Error ? error.message : String(error);
   if (!/UNIQUE/i.test(message)) return null;
