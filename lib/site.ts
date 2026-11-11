@@ -136,7 +136,7 @@ export const managementPlan = {
   title: "Fleet Management",
   accent: "red" as const,
   summary:
-    "We run the car. Commission is our share of each trip, and the rate depends on how long that trip is.",
+    "We match your high-quality cars with our high-quality renters. Commission is our share of each trip, and the rate depends on how long that trip is.",
   tiers: [
     { rate: "20%", label: "Trips under 7 days" },
     { rate: "15%", label: "Trips of 7–21 days" },
