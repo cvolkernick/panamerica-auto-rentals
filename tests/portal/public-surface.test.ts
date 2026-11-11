@@ -30,9 +30,10 @@ test("exhibit A is the single Fleet Management schedule", () => {
   assert.match(pdf, /5%/);
   assert.match(pdf, /Full name:/);
   assert.match(pdf, /VIN:/);
-  assert.match(pdf, /Monthly car payment amount/);
+  assert.match(pdf, /Monthly car payment amount:/);
+  assert.match(pdf, /Monthly insurance premium:/);
   assert.match(pdf, /Lender \/ lienholder name:/);
-  for (const banned of ["Spotlight", "Owner Exit", "Shared Opex", "50/50", "20/80", "80/20", "payoff", "Payoff"]) {
+  for (const banned of ["Spotlight", "Owner Exit", "Shared Opex", "50/50", "20/80", "80/20", "payoff", "Payoff", "rung", "Rung"]) {
     assert.equal(pdf.includes(banned), false, banned);
   }
 });
