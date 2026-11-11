@@ -38,22 +38,6 @@ export default function ManagementPage() {
         {managementPlan.title}
       </h1>
       <p className="mt-5 text-lg leading-relaxed text-white/75">
-        Renting a car comes first.{" "}
-        <Link href="/fleet" className="text-gold hover:underline">
-          Book direct
-        </Link>{" "}
-        on the fleet, or see{" "}
-        <Link href="/drivers" className="text-gold hover:underline">
-          driver rentals
-        </Link>{" "}
-        for gig and rideshare drivers in Fort Myers and Cape Coral. This page
-        is for vehicle owners.{" "}
-        <Link href="/partners" className="text-gold hover:underline">
-          Fleet partners
-        </Link>{" "}
-        lists who we work with.
-      </p>
-      <p className="mt-4 text-lg leading-relaxed text-white/75">
         {managementPlan.summary}
       </p>
       <p className="mt-4 text-base leading-relaxed text-white/65">

@@ -108,8 +108,7 @@ export default function AboutPage() {
           Fleet partners
         </p>
         <p className="mt-3 text-base leading-relaxed text-white/80">
-          Fleet partners are for vehicle owners. Meet the hosts and operators we
-          work with.
+          Meet the hosts and operators we work with.
         </p>
         <Link
           href="/partners"
