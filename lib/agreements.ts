@@ -1,5 +1,5 @@
 import agreementsData from "@/data/agreements.json";
-import { ownerPlans, type OwnerPlan } from "@/lib/site";
+import { managementPlan, type OwnerPlan } from "@/lib/site";
 
 export type AgreementStatus = "draft" | "final";
 
@@ -30,10 +30,8 @@ const agreementsBySlug = new Map(
   planAgreements.map((doc) => [doc.slug, doc] as const)
 );
 
-for (const plan of ownerPlans) {
-  if (!agreementsBySlug.has(plan.slug)) {
-    throw new Error(`missing plan agreement for ${plan.slug}`);
-  }
+if (!agreementsBySlug.has(managementPlan.slug)) {
+  throw new Error(`missing plan agreement for ${managementPlan.slug}`);
 }
 
 export function agreementForPlan(plan: OwnerPlan): PlanAgreement {
@@ -48,8 +46,8 @@ export function agreementBySlug(slug: string): PlanAgreement | undefined {
   return agreementsBySlug.get(slug);
 }
 
-export function agreementHref(slug: string): string {
-  return `/plans/${slug}`;
+export function agreementHref(): string {
+  return "/management/agreement";
 }
 
 export function agreementPdfHref(doc: PlanAgreement): string {

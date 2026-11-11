@@ -1,0 +1,5 @@
+# Cloudflare Pages. Exact paths only. Do not add a wildcard under /plans;
+# that would also catch the agreement PDFs in this folder. Portal Functions
+# stay on public/_routes.json and do not include these paths.
+/plans   /management   301
+/plans/  /management/  301

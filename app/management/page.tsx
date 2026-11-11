@@ -1,0 +1,170 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+
+import { PlanAgreementLinks } from "@/components/plan-agreement-links";
+import { Button } from "@/components/ui/button";
+import { planDisclaimer } from "@/lib/agreements";
+import { SITE_NAME, socialMetadata } from "@/lib/seo";
+import {
+  getContactEmail,
+  managementPlan,
+  noLockInTeaser,
+  planAccentBar,
+  planAccentBorder,
+} from "@/lib/site";
+import { cn } from "@/lib/utils";
+
+const description = `One fleet management plan for vehicle owners in Fort Myers and Cape Coral. Commission is 20% for trips under 7 days, 15% for 7–21 days, and 10% for trips over 21 days. ${managementPlan.firstMonth}`;
+
+export const metadata: Metadata = {
+  title: "Fleet Management",
+  description,
+  ...socialMetadata({
+    title: `Fleet Management · ${SITE_NAME}`,
+    description,
+    path: "/management",
+  }),
+};
+
+export default function ManagementPage() {
+  const email = getContactEmail();
+
+  return (
+    <div className="mx-auto w-full min-w-0 max-w-3xl px-4 py-14 sm:px-6 sm:py-20">
+      <p className="font-heading text-xs tracking-[0.28em] text-gold uppercase">
+        Owner plan
+      </p>
+      <h1 className="mt-3 text-4xl font-bold text-white sm:text-5xl">
+        {managementPlan.title}
+      </h1>
+      <p className="mt-5 text-lg leading-relaxed text-white/75">
+        Renting a car comes first.{" "}
+        <Link href="/fleet" className="text-gold hover:underline">
+          Book direct
+        </Link>{" "}
+        on the fleet, or see{" "}
+        <Link href="/drivers" className="text-gold hover:underline">
+          driver rentals
+        </Link>{" "}
+        for gig and rideshare drivers in Fort Myers and Cape Coral. This page
+        is for vehicle owners.{" "}
+        <Link href="/partners" className="text-gold hover:underline">
+          Fleet partners
+        </Link>{" "}
+        lists who we work with.
+      </p>
+      <p className="mt-4 text-lg leading-relaxed text-white/75">
+        {managementPlan.summary}
+      </p>
+      <p className="mt-4 text-base leading-relaxed text-white/65">
+        This owner plan is an operations service — not an investment, security,
+        or offer to sell a security.
+      </p>
+
+      <aside
+        className="mt-8 rounded-xl border border-gold/30 bg-navy-mid p-6 ring-1 ring-white/10 sm:p-8"
+        aria-label="No long-term lock-in"
+      >
+        <p className="font-heading text-[0.7rem] tracking-[0.22em] text-gold uppercase">
+          {noLockInTeaser.eyebrow}
+        </p>
+        <p className="mt-3 text-base leading-relaxed text-white/80">
+          {noLockInTeaser.body}
+        </p>
+      </aside>
+
+      <article
+        id={managementPlan.slug}
+        className={cn(
+          "mt-10 rounded-xl border-l-4 bg-navy-mid p-6 ring-1 ring-white/10 sm:p-8",
+          planAccentBorder[managementPlan.accent]
+        )}
+      >
+        <span
+          aria-hidden
+          className={cn(
+            "mb-4 block h-1 w-12 rounded-full",
+            planAccentBar[managementPlan.accent]
+          )}
+        />
+        <h2 className="font-heading text-[0.7rem] tracking-[0.22em] text-white/50 uppercase">
+          Commission by trip length
+        </h2>
+        <ul className="mt-6 grid gap-3 sm:grid-cols-3">
+          {managementPlan.tiers.map((tier) => (
+            <li
+              key={tier.rate}
+              className="rounded-lg bg-navy px-4 py-4 ring-1 ring-white/10"
+            >
+              <p className="font-heading text-3xl tracking-[0.08em] text-gold">
+                {tier.rate}
+              </p>
+              <p className="mt-2 text-sm leading-relaxed text-white/75">
+                {tier.label}
+              </p>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-4 text-base leading-relaxed text-white/80">
+          {managementPlan.firstMonth}
+        </p>
+        <dl className="mt-6 divide-y divide-white/10">
+          {managementPlan.details.map((item) => (
+            <div
+              key={item.heading}
+              className="grid gap-1 py-4 first:pt-0 last:pb-0 sm:grid-cols-[11rem_1fr] sm:items-baseline"
+            >
+              <dt className="font-heading text-xs tracking-[0.16em] text-white/55 uppercase">
+                {item.heading}
+              </dt>
+              <dd className="text-base leading-relaxed text-white/80">
+                {item.body}
+              </dd>
+            </div>
+          ))}
+        </dl>
+        <PlanAgreementLinks plan={managementPlan} />
+      </article>
+
+      <aside
+        className="mt-10 rounded-xl border border-white/10 bg-navy-mid/70 px-6 py-5 ring-1 ring-white/10 sm:px-8"
+        aria-label="Cyber Fleet coming soon"
+      >
+        <p className="font-heading text-[0.7rem] tracking-[0.22em] text-gold uppercase">
+          Coming soon
+        </p>
+        <p className="mt-3 text-base leading-relaxed text-white/75">
+          Cyber Fleet is a later path we are preparing for peer fleet operators
+          who want to move a legacy rental-platform book toward autonomy. It is
+          not part of this plan, not a live offering, and there is no checkout.
+        </p>
+        <Link
+          href="/cyberfleet"
+          className="mt-4 inline-block font-heading text-sm tracking-[0.16em] text-gold uppercase hover:underline"
+        >
+          Cyber Fleet
+        </Link>
+      </aside>
+
+      <p className="mt-10 text-sm leading-relaxed text-white/55">
+        {planDisclaimer}
+      </p>
+
+      <div className="mt-8 rounded-xl bg-navy-mid p-6 ring-1 ring-white/10 sm:flex sm:items-center sm:justify-between sm:p-8">
+        <p className="max-w-xl text-base leading-relaxed text-white/80">
+          Want to place a car on this plan? Write us at{" "}
+          <a href={`mailto:${email}`} className="text-gold hover:underline">
+            {email}
+          </a>
+          .
+        </p>
+        <Button
+          asChild
+          className="mt-4 h-11 bg-gold px-5 font-heading tracking-[0.16em] text-navy uppercase hover:bg-gold/90 sm:mt-0"
+        >
+          <Link href="/contact">Contact</Link>
+        </Button>
+      </div>
+    </div>
+  );
+}

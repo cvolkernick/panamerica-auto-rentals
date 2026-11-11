@@ -15,7 +15,7 @@ export function PlanAgreementLinks({ plan }: { plan: OwnerPlan }) {
   return (
     <p className="mt-6 flex min-w-0 flex-col items-start gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-4">
       <Link
-        href={agreementHref(plan.slug)}
+        href={agreementHref()}
         className="font-heading text-sm tracking-[0.16em] text-gold uppercase hover:underline"
       >
         Review the agreement

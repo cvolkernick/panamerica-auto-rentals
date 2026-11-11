@@ -11,7 +11,7 @@ const PUBLIC_PATHS = [
   "/drivers",
   "/fleet",
   "/partners",
-  "/plans",
+  "/management",
   "/services",
 ] as const;
 
