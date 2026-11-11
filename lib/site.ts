@@ -209,7 +209,7 @@ export const nav = [
   { href: "/", label: "Home" },
   { href: "/fleet", label: "Fleet" },
   { href: "/services", label: "Services" },
-  { href: "/management", label: "Fleet Management" },
+  { href: "/management", label: "Management" },
   { href: "/drivers", label: "Drivers" },
   { href: "/partners", label: "Partners" },
   { href: "/about", label: "About" },
