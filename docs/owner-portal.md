@@ -15,7 +15,7 @@ The public site stays a Next.js static export (`output: 'export'`, `trailingSlas
 
 ## What is not in this slice
 
-Team accounts, money, miles, a second person signing in, booking changes, and self-serve signup. An admin can store another owner row now. That person still cannot sign in until a password is set for them later. Do not add other owners as part of this setup.
+Team accounts, money, miles, booking changes, and self-serve signup. An admin can store another owner row and create a one-time invite link so that owner can set a password. Do not add other owners as part of this setup.
 
 ## Auth
 
@@ -33,6 +33,8 @@ Unknown emails and wrong passwords get the same `invalid_credentials` response. 
 
 `PORTAL_DEV_AUTH` is the local bypass. It works only when the value is exactly `1`, and only off the live hosts. `www.panamericafleet.com`, `panamericafleet.com`, and `*.pages.dev` ignore it. Leave it unset on the Pages project. Production config in this repo does not turn it on.
 
+An admin on `/admin/` can create an invite link for an owner. The link is `https://www.panamericafleet.com/owner/invite/?t=...`. It works once, expires after 72 hours, and replaces any unused link for that owner. The browser derives the key the same way as sign-in. The server stores only the SHA-256 of the token and the pepper HMAC of the derived key. The raw token and the password are not stored and are not logged.
+
 ## 1. Create the D1 database
 
 From the repo, when you are ready:
@@ -48,9 +50,10 @@ Copy the database id into the Pages binding in the next steps. Do not commit it.
 ```bash
 npx wrangler d1 execute panamerica-portal --remote --file=migrations/0001_init.sql
 npx wrangler d1 execute panamerica-portal --remote --file=migrations/0002_auth.sql
+npx wrangler d1 execute panamerica-portal --remote --file=migrations/0003_owner_invites.sql
 ```
 
-`0001` creates `owners` and `cars` and inserts only the Panamerica owner. It does not insert cars. `0002` adds `password_hash`, `sessions`, and `login_attempts`. It does not set a password. Run each file once. Running one again fails on the existing tables, which is what you want. If `0001` was already applied, run only `0002`.
+`0001` creates `owners` and `cars` and inserts only the Panamerica owner. It does not insert cars. `0002` adds `password_hash`, `sessions`, and `login_attempts`. It does not set a password. `0003` adds `owner_invites` and does not insert a token. Run each file once. Running one again fails on the existing tables, which is what you want. If `0001` and `0002` were already applied, run only `0003`.
 
 ## 3. Bind D1 on the Pages project
 
@@ -124,6 +127,7 @@ Confirm in a private window:
 ```bash
 npx wrangler d1 execute panamerica-portal --local --file=migrations/0001_init.sql
 npx wrangler d1 execute panamerica-portal --local --file=migrations/0002_auth.sql
+npx wrangler d1 execute panamerica-portal --local --file=migrations/0003_owner_invites.sql
 ```
 
 `.dev.vars` (do not commit):

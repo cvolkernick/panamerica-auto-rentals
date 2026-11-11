@@ -73,8 +73,18 @@ test("dev auth is not enabled in committed config", () => {
 });
 
 test("portal pages ask robots not to index", () => {
-  for (const path of ["app/owner/page.tsx", "app/admin/page.tsx"]) {
+  for (const path of ["app/owner/page.tsx", "app/admin/page.tsx", "app/owner/invite/page.tsx"]) {
     assert.match(source(path), /noindex/);
+  }
+});
+
+test("the invite page is noindex and stays out of the sitemap", () => {
+  assert.match(source("app/owner/invite/page.tsx"), /noindex/);
+  assert.doesNotMatch(source("app/sitemap.ts"), /invite/);
+  assert.match(source("app/robots.ts"), /\/owner\//);
+  const routes = JSON.parse(source("public/_routes.json")) as FunctionRoutes;
+  for (const path of ["/owner/invite/", "/owner/invite/index.html", "/api/portal/invite"]) {
+    assert.equal(functionsInvokedFor(path, routes), true, path);
   }
 });
 

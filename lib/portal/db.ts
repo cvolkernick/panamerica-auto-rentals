@@ -323,6 +323,70 @@ export async function countLoginFailuresForPair(
   return Number(row?.n ?? 0);
 }
 
+export type OwnerInviteRow = {
+  token_hash: string;
+  owner_id: number;
+  created_at: string;
+  expires_at: string;
+  used_at: string | null;
+};
+
+export async function invalidateUnusedInvites(
+  db: PortalD1,
+  ownerId: number,
+  usedAt: string
+): Promise<void> {
+  await db
+    .prepare(
+      `UPDATE owner_invites SET used_at = ? WHERE owner_id = ? AND used_at IS NULL`
+    )
+    .bind(usedAt, ownerId)
+    .run();
+}
+
+export async function insertOwnerInvite(
+  db: PortalD1,
+  tokenHash: string,
+  ownerId: number,
+  createdAt: string,
+  expiresAt: string
+): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO owner_invites (token_hash, owner_id, created_at, expires_at) VALUES (?, ?, ?, ?)`
+    )
+    .bind(tokenHash, ownerId, createdAt, expiresAt)
+    .run();
+}
+
+export async function getOwnerInviteByHash(
+  db: PortalD1,
+  tokenHash: string
+): Promise<OwnerInviteRow | null> {
+  return db
+    .prepare(
+      `SELECT token_hash, owner_id, created_at, expires_at, used_at FROM owner_invites WHERE token_hash = ?`
+    )
+    .bind(tokenHash)
+    .first<OwnerInviteRow>();
+}
+
+/** Claims one unused, unexpired invite. Returns false when another request already claimed it. */
+export async function claimOwnerInvite(
+  db: PortalD1,
+  tokenHash: string,
+  usedAt: string,
+  nowIso: string
+): Promise<boolean> {
+  const result = await db
+    .prepare(
+      `UPDATE owner_invites SET used_at = ? WHERE token_hash = ? AND used_at IS NULL AND expires_at > ?`
+    )
+    .bind(usedAt, tokenHash, nowIso)
+    .run();
+  return result.meta.changes === 1;
+}
+
 export function uniqueField(error: unknown): "vin" | "email" | null {
   const message = error instanceof Error ? error.message : String(error);
   if (!/UNIQUE/i.test(message)) return null;

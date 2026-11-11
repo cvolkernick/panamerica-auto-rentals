@@ -72,6 +72,8 @@ export function AdminPortal() {
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
+  const [inviteOwnerId, setInviteOwnerId] = useState<number | null>(null);
+  const [invites, setInvites] = useState<Record<number, { url: string; copied: boolean }>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -176,6 +178,32 @@ export function AdminPortal() {
     setReloadToken((value) => value + 1);
   }
 
+  async function createInvite(id: number) {
+    setInviteOwnerId(id);
+    setMessage("");
+    const result = await portalRequest<{ url: string; expiresAt: string }>(
+      `/api/portal/admin/owners/${id}/invite`,
+      { method: "POST" }
+    );
+    setInviteOwnerId(null);
+    const url = result.data?.url;
+    if (!result.ok || !url) {
+      setMessage("Could not create an invite link.");
+      return;
+    }
+    setInvites((current) => ({ ...current, [id]: { url, copied: false } }));
+  }
+
+  async function copyInvite(id: number, url: string) {
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      setMessage("Select the link and copy it.");
+      return;
+    }
+    setInvites((current) => ({ ...current, [id]: { url, copied: true } }));
+  }
+
   async function removeCar(id: number) {
     if (!window.confirm("Delete this car?")) return;
     setSaving(true);
@@ -240,7 +268,8 @@ export function AdminPortal() {
       title="Owners and cars"
       lede={
         <>
-          Signed in as {email}. Add an owner, then assign each car to an owner.{" "}
+          Signed in as {email}. Add an owner, then assign each car to an owner. Create an
+          invite link so that owner can set a password.{" "}
           <Link href="/owner/" className="text-gold hover:underline">
             Your cars
           </Link>
@@ -313,32 +342,63 @@ export function AdminPortal() {
           </div>
         </form>
         <ul className="mt-10 grid gap-6 sm:grid-cols-2">
-          {owners.map((owner) => (
-            <li key={owner.id} className="rounded-xl bg-navy-mid p-6 ring-1 ring-white/10">
-              <h3 className="text-2xl font-bold text-white">{owner.name}</h3>
-              <p className="mt-3 text-base leading-relaxed text-white/80">{owner.email}</p>
-              <p className="mt-2 text-sm leading-relaxed text-white/70">
-                {owner.storedAdmin ? "Admin" : "Owner"}
-                {owner.isAdmin && !owner.storedAdmin ? " (also set on the server)" : ""}
-              </p>
-              <Button
-                type="button"
-                variant="outline"
-                className={`mt-6 ${secondaryButton}`}
-                onClick={() => {
-                  setOwnerId(owner.id);
-                  setOwnerForm({
-                    name: owner.name,
-                    email: owner.email,
-                    storedAdmin: owner.storedAdmin ? "1" : "0",
-                  });
-                  setOwnerErrors({});
-                }}
-              >
-                Edit
-              </Button>
-            </li>
-          ))}
+          {owners.map((owner) => {
+            const invite = invites[owner.id];
+            return (
+              <li key={owner.id} className="min-w-0 rounded-xl bg-navy-mid p-6 ring-1 ring-white/10">
+                <h3 className="text-2xl font-bold text-white">{owner.name}</h3>
+                <p className="mt-3 text-base leading-relaxed text-white/80">{owner.email}</p>
+                <p className="mt-2 text-sm leading-relaxed text-white/70">
+                  {owner.storedAdmin ? "Admin" : "Owner"}
+                  {owner.isAdmin && !owner.storedAdmin ? " (also set on the server)" : ""}
+                </p>
+                <div className="mt-6 flex flex-wrap gap-x-4 gap-y-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className={secondaryButton}
+                    onClick={() => {
+                      setOwnerId(owner.id);
+                      setOwnerForm({
+                        name: owner.name,
+                        email: owner.email,
+                        storedAdmin: owner.storedAdmin ? "1" : "0",
+                      });
+                      setOwnerErrors({});
+                    }}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className={secondaryButton}
+                    disabled={inviteOwnerId === owner.id}
+                    onClick={() => createInvite(owner.id)}
+                  >
+                    {inviteOwnerId === owner.id ? "Creating link" : "Create invite link"}
+                  </Button>
+                </div>
+                {invite ? (
+                  <div className="mt-4 min-w-0">
+                    <p className="text-sm leading-relaxed text-white/70">
+                      This link works once and expires in 72 hours. Copy it now. It will not be
+                      shown again.
+                    </p>
+                    <p className="mt-3 break-all text-sm leading-relaxed text-white">{invite.url}</p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className={`mt-4 ${secondaryButton}`}
+                      onClick={() => copyInvite(owner.id, invite.url)}
+                    >
+                      {invite.copied ? "Copied" : "Copy"}
+                    </Button>
+                  </div>
+                ) : null}
+              </li>
+            );
+          })}
         </ul>
       </section>
 
