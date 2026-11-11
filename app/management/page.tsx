@@ -14,8 +14,7 @@ import {
 } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
-const description =
-  "One fleet management plan for vehicle owners in Fort Myers and Cape Coral. Commission is 20% for trips under 7 days, 15% for 7–21 days, and 10% for trips over 21 days.";
+const description = `One fleet management plan for vehicle owners in Fort Myers and Cape Coral. Commission is 20% for trips under 7 days, 15% for 7–21 days, and 10% for trips over 21 days. ${managementPlan.firstMonth}`;
 
 export const metadata: Metadata = {
   title: "Fleet Management",
@@ -106,6 +105,9 @@ export default function ManagementPage() {
             </li>
           ))}
         </ul>
+        <p className="mt-4 text-base leading-relaxed text-white/80">
+          {managementPlan.firstMonth}
+        </p>
         <dl className="mt-6 divide-y divide-white/10">
           {managementPlan.details.map((item) => (
             <div

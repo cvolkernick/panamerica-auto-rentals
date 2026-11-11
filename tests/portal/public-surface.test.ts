@@ -8,6 +8,15 @@ function source(path: string): string {
   return readFileSync(path, "utf8");
 }
 
+test("fleet management states the first-month half commission", () => {
+  const line = "First month: half commission — 10% / 7.5% / 5%.";
+  assert.match(source("lib/site.ts"), new RegExp(line.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  const page = source("app/management/page.tsx");
+  assert.match(page, /managementPlan\.firstMonth/);
+  assert.match(page, /\$\{managementPlan\.firstMonth\}/);
+  assert.match(page, /20% for trips under 7 days, 15% for 7–21 days, and 10% for trips over 21 days/);
+});
+
 test("sitemap source stays on the public paths", () => {
   const sitemap = source("app/sitemap.ts");
   assert.match(sitemap, /\/fleet/);

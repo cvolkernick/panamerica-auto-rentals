@@ -85,6 +85,9 @@ export default function PartnersPage() {
               </li>
             ))}
           </ul>
+          <p className="mt-4 text-base leading-relaxed text-white/80">
+            {managementPlan.firstMonth}
+          </p>
         </article>
       </section>
 
@@ -172,7 +175,7 @@ export default function PartnersPage() {
       <div className="mt-10 rounded-xl bg-navy-mid p-6 ring-1 ring-white/10 sm:flex sm:items-center sm:justify-between sm:p-8">
         <p className="max-w-xl text-base leading-relaxed text-white/80">
           One management plan. Commission is 20% under 7 days, 15% for 7–21
-          days, and 10% over 21 days.
+          days, and 10% over 21 days. {managementPlan.firstMonth}
         </p>
         <Button
           asChild

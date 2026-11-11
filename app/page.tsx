@@ -210,6 +210,9 @@ export default function HomePage() {
                     </li>
                   ))}
                 </ul>
+                <p className="mt-4 text-sm leading-relaxed text-white/75">
+                  {managementPlan.firstMonth}
+                </p>
               </CardDescription>
             </CardHeader>
           </Card>

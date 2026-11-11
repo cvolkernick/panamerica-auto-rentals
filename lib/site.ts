@@ -142,6 +142,7 @@ export const managementPlan = {
     { rate: "15%", label: "Trips of 7–21 days" },
     { rate: "10%", label: "Trips over 21 days" },
   ],
+  firstMonth: "First month: half commission — 10% / 7.5% / 5%.",
   details: [
     {
       heading: "What we do",
