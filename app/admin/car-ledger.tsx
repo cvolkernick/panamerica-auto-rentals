@@ -101,7 +101,7 @@ function EntryActions({
   );
 }
 
-export function CarLedger({ car, onClose }: { car: CarJson; onClose: () => void }) {
+export function CarLedger({ car, onClose }: { car: CarJson; onClose?: () => void }) {
   const today = useEasternToday();
   const [monthOverride, setMonthOverride] = useState<string | null>(null);
   const [entries, setEntries] = useState<LedgerEntryJson[]>([]);
@@ -118,8 +118,9 @@ export function CarLedger({ car, onClose }: { car: CarJson; onClose: () => void 
   const form = formOverride ?? blankForm(today);
 
   useEffect(() => {
+    if (!onClose) return;
     document.getElementById("car-ledger-title")?.focus();
-  }, [car.id]);
+  }, [car.id, onClose]);
 
   useEffect(() => {
     if (!month) return;
@@ -251,9 +252,11 @@ export function CarLedger({ car, onClose }: { car: CarJson; onClose: () => void 
             Trip income is money in. Every other type is a deduction. Amounts are entered in dollars.
           </p>
         </div>
-        <Button type="button" variant="outline" className={secondaryButton} onClick={onClose}>
-          Close
-        </Button>
+        {onClose ? (
+          <Button type="button" variant="outline" className={secondaryButton} onClick={onClose}>
+            Close
+          </Button>
+        ) : null}
       </div>
 
       <div className="mt-8 max-w-xs min-w-0">

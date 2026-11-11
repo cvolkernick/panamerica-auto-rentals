@@ -4,6 +4,7 @@ import {
   deleteCar,
   deleteLedgerEntry,
   getCarById,
+  getCarByPlateKey,
   getLedgerEntry,
   getOwnedCar,
   getOwnerById,
@@ -380,6 +381,14 @@ async function routeAdmin(
       });
     }
     return methodNotAllowed("GET, POST");
+  }
+
+  const byPlate = path.match(/^\/api\/portal\/admin\/cars\/by-plate\/([^/]+)$/);
+  if (byPlate) {
+    if (method !== "GET") return methodNotAllowed("GET");
+    const row = await getCarByPlateKey(db, byPlate[1]);
+    if (!row) return json({ error: "car_not_found" }, 404);
+    return json({ car: carJson(row) });
   }
 
   const carMatch = path.match(/^\/api\/portal\/admin\/cars\/([1-9]\d*)$/);

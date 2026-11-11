@@ -526,11 +526,19 @@ describe("ledger admin API", () => {
 });
 
 describe("ledger admin view", () => {
-  test("the ledger stays on the admin page and wraps long text", () => {
+  test("each car links to its own page and the ledger wraps long text", () => {
     const admin = readFileSync("app/admin/admin-portal.tsx", "utf8");
     const view = readFileSync("app/admin/car-ledger.tsx", "utf8");
+    const page = readFileSync("app/admin/cars/car-admin.tsx", "utf8");
     const owner = readFileSync("app/owner/owner-portal.tsx", "utf8");
     assert.match(admin, />\s*Ledger\s*</);
+    assert.match(admin, /carAdminHref/);
+    assert.doesNotMatch(admin, /setLedgerCarId/);
+    assert.doesNotMatch(admin, /<CarLedger/);
+    assert.match(page, /<CarLedger/);
+    assert.match(page, /window\.location\.pathname/);
+    assert.match(page, /history\.replaceState/);
+    assert.match(page, /Car not found/);
     assert.match(view, /min-w-0/);
     assert.match(view, /wrap-anywhere/);
     assert.match(view, /overflow-hidden/);

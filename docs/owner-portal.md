@@ -9,7 +9,7 @@ The public site stays a Next.js static export (`output: 'export'`, `trailingSlas
 - One owner is seeded: **Panamerica Auto Rentals**, `panamerica.cars@gmail.com`, stored as admin.
 - That person signs in with an email and password on `/owner/` and `/admin/`. There is no Cloudflare Access app and no Zero Trust.
 - `/owner/` lists that owner's cars (year, make, model, color, plate, VIN).
-- `/admin/` lists owners, adds and edits owners, and adds, edits, deletes, and assigns cars.
+- `/admin/` lists owners, adds and edits owners, and adds, edits, deletes, and assigns cars. Each car has a page at `/admin/cars/<plate>` (or `/admin/cars/id-<id>` when the plate is blank) with the car, its owner, and the ledger.
 - Every owner car query is `WHERE owner_id = <the signed-in owner>`. Admin routes require admin.
 - These URLs are not in the nav, footer, or sitemap. Pages send `noindex`. The login form is the signed-out state of those same pages.
 
@@ -27,7 +27,7 @@ Login and logout live at `/api/portal/login` and `/api/portal/logout`. Logout de
 
 Unknown emails and wrong passwords get the same `invalid_credentials` response. Only failed logins count, and a request that is already limited is not counted again. The tight limit is one email plus one IPv4 address, or one email plus one IPv6 /64. One IPv6 /48 is also limited to 60 failed logins in 15 minutes, so rotating /64s inside that network cannot keep guessing. A different /48 can still sign in. The higher email-wide cap applies only to a network that already has a few recent failures, so a clean network can still sign in. A browser that signed in before keeps a device cookie that skips that email-wide cap. `*.pages.dev` cannot log in and cannot use a session cookie.
 
-`public/_routes.json` invokes Functions only for `/owner`, `/owner/*`, `/admin`, `/admin/*`, and `/api/portal/*`. Public pages, including `/` and `/fleet`, are served as static files.
+`public/_routes.json` invokes Functions only for `/owner`, `/owner/*`, `/admin`, `/admin/*`, and `/api/portal/*`. It excludes `/admin/cars/*` so the `_redirects` rule `/admin/cars/*  /admin/cars/  200` can serve one static shell for every plate. The shell reads the plate from the browser path. On the apex host that shell sends the browser to `www`, because `_redirects` cannot vary by hostname. Public pages, including `/` and `/fleet`, are served as static files. The `/plans` rules stay exact 301s above that splat.
 
 `owners.is_admin` marks an admin. The seeded row is admin. `ADMIN_EMAILS` (comma-separated) also grants admin for an email that already has an owners row. It does not create a login by itself.
 
@@ -154,6 +154,6 @@ npm test
 npm run build
 ```
 
-`npm test` covers login, bad credentials, unknown emails, unauthenticated 401s, rate limits, owner isolation, admin gates, the dev bypass staying off, pages.dev rejection, the setup token, VIN and year validation, admin create / edit / delete, and the admin car ledger.
+`npm test` covers login, bad credentials, unknown emails, unauthenticated 401s, rate limits, owner isolation, admin gates, the dev bypass staying off, pages.dev rejection, the setup token, VIN and year validation, admin create / edit / delete, the admin car ledger, and admin lookup by plate.
 
-`npm run build` still writes `out/owner` and `out/admin`.
+`npm run build` still writes `out/owner`, `out/admin`, and `out/admin/cars`.
