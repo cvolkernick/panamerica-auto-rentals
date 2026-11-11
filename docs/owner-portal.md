@@ -15,7 +15,7 @@ The public site stays a Next.js static export (`output: 'export'`, `trailingSlas
 
 ## What is not in this slice
 
-Team accounts, money, miles, booking changes, and self-serve signup. An admin can store another owner row and create a one-time invite link so that owner can set a password. Do not add other owners as part of this setup.
+Team accounts, owner-facing balances, miles, booking changes, and self-serve signup. An admin can store another owner row and create a one-time invite link so that owner can set a password. An admin can also record a per-car ledger. Owners do not see that ledger. Do not add other owners as part of this setup.
 
 ## Auth
 
@@ -51,9 +51,10 @@ Copy the database id into the Pages binding in the next steps. Do not commit it.
 npx wrangler d1 execute panamerica-portal --remote --file=migrations/0001_init.sql
 npx wrangler d1 execute panamerica-portal --remote --file=migrations/0002_auth.sql
 npx wrangler d1 execute panamerica-portal --remote --file=migrations/0003_owner_invites.sql
+npx wrangler d1 execute panamerica-portal --remote --file=migrations/0004_car_ledger.sql
 ```
 
-`0001` creates `owners` and `cars` and inserts only the Panamerica owner. It does not insert cars. `0002` adds `password_hash`, `sessions`, and `login_attempts`. It does not set a password. `0003` adds `owner_invites` and does not insert a token. Run each file once. Running one again fails on the existing tables, which is what you want. If `0001` and `0002` were already applied, run only `0003`.
+`0001` creates `owners` and `cars` and inserts only the Panamerica owner. It does not insert cars. `0002` adds `password_hash`, `sessions`, and `login_attempts`. It does not set a password. `0003` adds `owner_invites` and does not insert a token. `0004` adds `car_ledger` and does not insert entries. Run each file once. Running one again fails on the existing tables, which is what you want. If `0001`, `0002`, and `0003` were already applied, run only `0004`. Apply `0004` before deploying the admin ledger.
 
 ## 3. Bind D1 on the Pages project
 
@@ -128,6 +129,7 @@ Confirm in a private window:
 npx wrangler d1 execute panamerica-portal --local --file=migrations/0001_init.sql
 npx wrangler d1 execute panamerica-portal --local --file=migrations/0002_auth.sql
 npx wrangler d1 execute panamerica-portal --local --file=migrations/0003_owner_invites.sql
+npx wrangler d1 execute panamerica-portal --local --file=migrations/0004_car_ledger.sql
 ```
 
 `.dev.vars` (do not commit):
@@ -152,6 +154,6 @@ npm test
 npm run build
 ```
 
-`npm test` covers login, bad credentials, unknown emails, unauthenticated 401s, rate limits, owner isolation, admin gates, the dev bypass staying off, pages.dev rejection, the setup token, VIN and year validation, and admin create / edit / delete.
+`npm test` covers login, bad credentials, unknown emails, unauthenticated 401s, rate limits, owner isolation, admin gates, the dev bypass staying off, pages.dev rejection, the setup token, VIN and year validation, admin create / edit / delete, and the admin car ledger.
 
 `npm run build` still writes `out/owner` and `out/admin`.

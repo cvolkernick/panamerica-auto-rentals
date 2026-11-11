@@ -1,7 +1,8 @@
 import type { PortalD1 } from "./d1";
 import type { PortalEnv } from "./env";
-import type { CarJson, OwnerJson } from "./types";
-import type { CarWrite, OwnerWrite } from "./validate";
+import type { LedgerType } from "./ledger";
+import type { CarJson, LedgerEntryJson, OwnerJson } from "./types";
+import type { CarWrite, LedgerWrite, OwnerWrite } from "./validate";
 
 export type OwnerRow = {
   id: number;
@@ -385,6 +386,107 @@ export async function claimOwnerInvite(
     .bind(usedAt, tokenHash, nowIso)
     .run();
   return result.meta.changes === 1;
+}
+
+export type LedgerRow = {
+  id: number;
+  car_id: number;
+  entry_date: string;
+  type: LedgerType;
+  amount_cents: number;
+  note: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by: number;
+};
+
+const LEDGER_COLUMNS =
+  "id, car_id, entry_date, type, amount_cents, note, created_at, updated_at, created_by";
+
+const LIST_LEDGER_SQL = `SELECT ${LEDGER_COLUMNS} FROM car_ledger WHERE car_id = ? ORDER BY entry_date DESC, id DESC`;
+
+const LIST_LEDGER_MONTH_SQL = `SELECT ${LEDGER_COLUMNS} FROM car_ledger WHERE car_id = ? AND entry_date >= ? AND entry_date < ? ORDER BY entry_date DESC, id DESC`;
+
+const LEDGER_BY_ID_SQL = `SELECT ${LEDGER_COLUMNS} FROM car_ledger WHERE id = ? AND car_id = ?`;
+
+const INSERT_LEDGER_SQL = `INSERT INTO car_ledger (car_id, entry_date, type, amount_cents, note, created_at, updated_at, created_by) VALUES (?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'), ?)`;
+
+const UPDATE_LEDGER_SQL = `UPDATE car_ledger SET entry_date = ?, type = ?, amount_cents = ?, note = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ? AND car_id = ?`;
+
+export function ledgerJson(row: LedgerRow): LedgerEntryJson {
+  return {
+    id: Number(row.id),
+    carId: Number(row.car_id),
+    entryDate: row.entry_date,
+    type: row.type,
+    amountCents: Number(row.amount_cents),
+    note: row.note,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    createdBy: Number(row.created_by),
+  };
+}
+
+export async function listLedgerEntries(
+  db: PortalD1,
+  carId: number,
+  range?: { start: string; end: string }
+): Promise<LedgerRow[]> {
+  if (range) {
+    const result = await db
+      .prepare(LIST_LEDGER_MONTH_SQL)
+      .bind(carId, range.start, range.end)
+      .all<LedgerRow>();
+    return result.results;
+  }
+  const result = await db.prepare(LIST_LEDGER_SQL).bind(carId).all<LedgerRow>();
+  return result.results;
+}
+
+export async function getLedgerEntry(
+  db: PortalD1,
+  carId: number,
+  entryId: number
+): Promise<LedgerRow | null> {
+  return db.prepare(LEDGER_BY_ID_SQL).bind(entryId, carId).first<LedgerRow>();
+}
+
+export async function insertLedgerEntry(
+  db: PortalD1,
+  carId: number,
+  entry: LedgerWrite,
+  createdBy: number
+): Promise<number> {
+  const result = await db
+    .prepare(INSERT_LEDGER_SQL)
+    .bind(carId, entry.entryDate, entry.type, entry.amountCents, entry.note, createdBy)
+    .run();
+  return Number(result.meta.last_row_id);
+}
+
+export async function updateLedgerEntry(
+  db: PortalD1,
+  carId: number,
+  entryId: number,
+  entry: LedgerWrite
+): Promise<void> {
+  await db
+    .prepare(UPDATE_LEDGER_SQL)
+    .bind(entry.entryDate, entry.type, entry.amountCents, entry.note, entryId, carId)
+    .run();
+}
+
+export async function deleteLedgerEntry(
+  db: PortalD1,
+  carId: number,
+  entryId: number
+): Promise<void> {
+  await db.prepare(`DELETE FROM car_ledger WHERE id = ? AND car_id = ?`).bind(entryId, carId).run();
+}
+
+export function isForeignKeyError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /FOREIGN KEY constraint failed/i.test(message);
 }
 
 export function uniqueField(error: unknown): "vin" | "email" | null {
