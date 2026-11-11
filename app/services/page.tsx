@@ -32,7 +32,7 @@ export default function ServicesPage() {
         Services
       </p>
       <h1 className="mt-3 text-4xl font-bold text-white sm:text-5xl">
-        Work we actually do
+        Work we do
       </h1>
       <p className="mt-5 text-lg leading-relaxed text-white/75">
         We rent clean, well-maintained vehicles by the day, week, or month to

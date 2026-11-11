@@ -54,7 +54,10 @@ export default function ManagementPage() {
         lists who we work with.
       </p>
       <p className="mt-4 text-lg leading-relaxed text-white/75">
-        {managementPlan.summary}
+        {managementPlan.summary.replace(
+          "We run the car.",
+          "We match your high-quality cars with our high-quality renters."
+        )}
       </p>
       <p className="mt-4 text-base leading-relaxed text-white/65">
         This owner plan is an operations service — not an investment, security,
