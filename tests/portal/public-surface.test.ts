@@ -17,6 +17,26 @@ test("fleet management states the first-month half commission", () => {
   assert.match(page, /20% for trips under 7 days, 15% for 7–21 days, and 10% for trips over 21 days/);
 });
 
+test("exhibit A is the single Fleet Management schedule", () => {
+  const pdf = source("public/plans/exhibit-a-vehicle-schedule.pdf");
+  assert.match(pdf, /Plan: Fleet Management/);
+  assert.match(pdf, /20%/);
+  assert.match(pdf, /trips under 7 days/);
+  assert.match(pdf, /15%/);
+  assert.match(pdf, /10%/);
+  assert.match(pdf, /over 21/);
+  assert.match(pdf, /First month: half commission/);
+  assert.match(pdf, /7\.5%/);
+  assert.match(pdf, /5%/);
+  assert.match(pdf, /Full name:/);
+  assert.match(pdf, /VIN:/);
+  assert.match(pdf, /Monthly car payment amount/);
+  assert.match(pdf, /Lender \/ lienholder name:/);
+  for (const banned of ["Spotlight", "Owner Exit", "Shared Opex", "50/50", "20/80", "80/20", "payoff", "Payoff"]) {
+    assert.equal(pdf.includes(banned), false, banned);
+  }
+});
+
 test("sitemap source stays on the public paths", () => {
   const sitemap = source("app/sitemap.ts");
   assert.match(sitemap, /\/fleet/);

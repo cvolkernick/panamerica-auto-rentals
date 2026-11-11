@@ -107,7 +107,7 @@ Do **not** reconstruct agreement clauses from the marketing copy. Owner-final PD
 | Fleet Management | `/management/agreement` | `/plans/management-agreement.pdf` |
 | Exhibit A | — | `/plans/exhibit-a-vehicle-schedule.pdf` |
 
-The fleet management agreement PDF is a generated draft (`"pdfSource": "generated"`). Exhibit A is owner-supplied. `scripts/build-plan-agreements.py` skips any document marked `"pdfSource": "owner"` so a regenerate cannot overwrite it.
+The fleet management agreement PDF is a generated draft (`"pdfSource": "generated"`). Exhibit A is generated from `scripts/build-exhibit-a.py` (`python3 scripts/build-exhibit-a.py`). `scripts/build-plan-agreements.py` skips any document marked `"pdfSource": "owner"` so a regenerate cannot overwrite it.
 
 ## Legal line
 
