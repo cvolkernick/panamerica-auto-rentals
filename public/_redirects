@@ -1,5 +1,9 @@
-# Cloudflare Pages. Exact paths only. Do not add a wildcard under /plans;
-# that would also catch the agreement PDFs in this folder. Portal Functions
-# stay on public/_routes.json and do not include these paths.
+# Cloudflare Pages. Static rules stay above dynamic ones. The /plans
+# rules are exact paths only. Do not add a wildcard under /plans; that
+# would also catch the agreement PDFs in this folder. The /admin/cars
+# splat is a 200 rewrite to the one static shell, so the plate stays in
+# the browser URL. public/_routes.json excludes /admin/cars/* so this
+# rewrite runs. Portal Functions do not include these /plans paths.
 /plans   /management   301
 /plans/  /management/  301
+/admin/cars/*  /admin/cars/  200

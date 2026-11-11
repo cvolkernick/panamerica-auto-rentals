@@ -73,7 +73,12 @@ test("dev auth is not enabled in committed config", () => {
 });
 
 test("portal pages ask robots not to index", () => {
-  for (const path of ["app/owner/page.tsx", "app/admin/page.tsx", "app/owner/invite/page.tsx"]) {
+  for (const path of [
+    "app/owner/page.tsx",
+    "app/admin/page.tsx",
+    "app/admin/cars/page.tsx",
+    "app/owner/invite/page.tsx",
+  ]) {
     assert.match(source(path), /noindex/);
   }
 });
@@ -115,6 +120,10 @@ test("old plans URLs redirect exactly and stay outside Functions", () => {
   assert.match(redirects, /^\/plans\s+\/management\s+301$/m);
   assert.match(redirects, /^\/plans\/\s+\/management\/\s+301$/m);
   assert.doesNotMatch(redirects, /\/plans\/\*/);
+  const plans = redirects.search(/^\/plans\s+\/management\s+301$/m);
+  const plansSlash = redirects.search(/^\/plans\/\s+\/management\/\s+301$/m);
+  const cars = redirects.search(/^\/admin\/cars\/\*\s+\/admin\/cars\/\s+200$/m);
+  assert.ok(plans >= 0 && plansSlash > plans && cars > plansSlash);
   const routes = JSON.parse(source("public/_routes.json")) as FunctionRoutes;
   for (const path of ["/plans", "/plans/", "/management", "/management/", "/plans/management-agreement.pdf"]) {
     assert.equal(functionsInvokedFor(path, routes), false, path);
@@ -124,7 +133,10 @@ test("old plans URLs redirect exactly and stay outside Functions", () => {
 test("functions are not invoked for public routes", () => {
   const routes = JSON.parse(source("public/_routes.json")) as FunctionRoutes;
   assert.deepEqual(routes.include, ["/owner", "/owner/*", "/admin", "/admin/*", "/api/portal/*"]);
-  assert.deepEqual(routes.exclude, []);
+  assert.deepEqual(routes.exclude, ["/admin/cars/*"]);
+  assert.equal(functionsInvokedFor("/admin/cars/ABC1234", routes), false);
+  assert.equal(functionsInvokedFor("/admin/cars/ABC1234/", routes), false);
+  assert.equal(functionsInvokedFor("/api/portal/admin/cars/by-plate/ABC1234", routes), true);
   for (const path of ["/", "/fleet", "/fleet/", "/plans", "/plans/", "/management", "/management/", "/about", "/contact/", "/sitemap.xml", "/robots.txt"]) {
     assert.equal(functionsInvokedFor(path, routes), false, path);
   }

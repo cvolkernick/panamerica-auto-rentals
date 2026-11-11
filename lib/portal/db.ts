@@ -1,3 +1,4 @@
+import { carIdFromAdminKey, normalizePlateKey } from "./car-path";
 import type { PortalD1 } from "./d1";
 import type { PortalEnv } from "./env";
 import type { LedgerType } from "./ledger";
@@ -41,6 +42,8 @@ export const OWNER_CAR_BY_ID_SQL = `SELECT ${CAR_COLUMNS} FROM cars WHERE id = ?
 const ADMIN_CARS_SQL = `SELECT c.id, c.owner_id, c.year, c.make, c.model, c.color, c.license_plate, c.vin, c.created_at, c.updated_at, o.name AS owner_name, o.email AS owner_email FROM cars c JOIN owners o ON o.id = c.owner_id ORDER BY o.name, c.year DESC, c.id`;
 
 const ADMIN_CAR_BY_ID_SQL = `SELECT c.id, c.owner_id, c.year, c.make, c.model, c.color, c.license_plate, c.vin, c.created_at, c.updated_at, o.name AS owner_name, o.email AS owner_email FROM cars c JOIN owners o ON o.id = c.owner_id WHERE c.id = ?`;
+
+const ADMIN_CAR_BY_PLATE_SQL = `SELECT c.id, c.owner_id, c.year, c.make, c.model, c.color, c.license_plate, c.vin, c.created_at, c.updated_at, o.name AS owner_name, o.email AS owner_email FROM cars c JOIN owners o ON o.id = c.owner_id WHERE REPLACE(REPLACE(UPPER(c.license_plate), ' ', ''), '-', '') = ? ORDER BY c.id LIMIT 1`;
 
 const INSERT_CAR_SQL = `INSERT INTO cars (owner_id, year, make, model, color, license_plate, vin, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))`;
 
@@ -167,6 +170,25 @@ export async function listAllCars(db: PortalD1): Promise<CarRow[]> {
 
 export async function getCarById(db: PortalD1, carId: number): Promise<CarRow | null> {
   return db.prepare(ADMIN_CAR_BY_ID_SQL).bind(carId).first<CarRow>();
+}
+
+/**
+ * Admin lookup for /admin/cars/<plate>. `id-<id>` reads that car.
+ * Any other key matches the plate with case, spaces, and dashes ignored.
+ * A blank key does not match a car that has no plate.
+ */
+export async function getCarByPlateKey(db: PortalD1, key: string): Promise<CarRow | null> {
+  let decoded = key;
+  try {
+    decoded = decodeURIComponent(key);
+  } catch {
+    return null;
+  }
+  const id = carIdFromAdminKey(decoded);
+  if (id !== null) return getCarById(db, id);
+  const plate = normalizePlateKey(decoded);
+  if (!plate) return null;
+  return db.prepare(ADMIN_CAR_BY_PLATE_SQL).bind(plate).first<CarRow>();
 }
 
 export async function insertCar(db: PortalD1, car: CarWrite): Promise<number> {
