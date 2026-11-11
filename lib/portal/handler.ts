@@ -2,19 +2,27 @@ import {
   carJson,
   countStoredAdmins,
   deleteCar,
+  deleteLedgerEntry,
   getCarById,
+  getLedgerEntry,
   getOwnedCar,
   getOwnerById,
   insertCar,
+  insertLedgerEntry,
   insertOwner,
+  isForeignKeyError,
+  ledgerJson,
   listAllCars,
+  listLedgerEntries,
   listOwnedCars,
   listOwners,
   ownerJson,
   uniqueField,
   updateCar,
+  updateLedgerEntry,
   updateOwner,
   type CarRow,
+  type LedgerRow,
   type OwnerRow,
 } from "./db";
 import type { PortalD1 } from "./d1";
@@ -22,13 +30,19 @@ import type { PortalEnv } from "./env";
 import { portalApexRedirect } from "./hosts";
 import { forbidden, json, readJson, validationError } from "./http";
 import { createOwnerInvite, handleInvite } from "./invite";
+import { ledgerTotals, monthBounds } from "./ledger";
 import { authenticate, handleLogin, handleLogout, handleSetupPassword, requireCsrf } from "./login";
 import {
   parseCarCreate,
   parseCarPatch,
+  parseLedgerCreate,
+  parseLedgerMonth,
+  parseLedgerPatch,
   parseOwnerCreate,
   parseOwnerPatch,
   type CarWrite,
+  type LedgerPatch,
+  type LedgerWrite,
   type OwnerWrite,
 } from "./validate";
 
@@ -83,6 +97,28 @@ function ownerWriteFromRow(row: OwnerRow, patch: Partial<OwnerWrite>): OwnerWrit
     storedAdmin:
       patch.storedAdmin !== undefined ? patch.storedAdmin : Number(row.is_admin) === 1,
   };
+}
+
+function ledgerWriteFromRow(row: LedgerRow, patch: LedgerPatch): LedgerWrite {
+  return {
+    entryDate: patch.entryDate ?? row.entry_date,
+    type: patch.type ?? row.type,
+    amountCents: patch.amountCents ?? Number(row.amount_cents),
+    note: patch.note !== undefined ? patch.note : row.note,
+  };
+}
+
+async function ledgerConstraint(error: unknown, db: PortalD1, carId: number): Promise<Response | null> {
+  if (isForeignKeyError(error)) {
+    const car = await getCarById(db, carId);
+    if (!car) return notFound();
+    return json({ error: "conflict", reason: "foreign_key" }, 409);
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  if (/CHECK constraint failed/i.test(message)) {
+    return validationError({ body: "That ledger entry is not valid." });
+  }
+  return null;
 }
 
 function carWriteFromRow(row: CarRow, patch: Partial<CarWrite>): CarWrite {
@@ -161,10 +197,93 @@ async function route(request: Request, env: PortalEnv): Promise<Response> {
 
   if (path.startsWith("/api/portal/admin")) {
     if (!auth.owner.isAdmin) return forbidden("not_admin");
-    return routeAdmin(request, db, env, path, method);
+    return routeAdmin(request, db, env, path, method, auth.owner.id);
   }
 
   return notFound();
+}
+
+async function routeLedger(
+  request: Request,
+  db: PortalD1,
+  path: string,
+  method: string,
+  actorId: number
+): Promise<Response | null> {
+  const entryMatch = path.match(/^\/api\/portal\/admin\/cars\/([1-9]\d*)\/ledger\/([1-9]\d*)$/);
+  if (entryMatch) {
+    const carId = parsePathId(entryMatch[1]);
+    const entryId = parsePathId(entryMatch[2]);
+    if (carId === null || entryId === null) return notFound();
+    const car = await getCarById(db, carId);
+    if (!car) return notFound();
+    if (method === "PATCH") {
+      const existing = await getLedgerEntry(db, carId, entryId);
+      if (!existing) return notFound();
+      const body = await readJson(request);
+      if (!body.ok) return body.response;
+      const parsed = parseLedgerPatch(body.value);
+      if (!parsed.ok) return validationError(parsed.fields);
+      const next = ledgerWriteFromRow(existing, parsed.value);
+      try {
+        await updateLedgerEntry(db, carId, entryId, next);
+      } catch (error) {
+        const denied = await ledgerConstraint(error, db, carId);
+        if (denied) return denied;
+        throw error;
+      }
+      const row = await getLedgerEntry(db, carId, entryId);
+      if (!row) return notFound();
+      return json({ entry: ledgerJson(row) });
+    }
+    if (method === "DELETE") {
+      const existing = await getLedgerEntry(db, carId, entryId);
+      if (!existing) return notFound();
+      await deleteLedgerEntry(db, carId, entryId);
+      return json({ ok: true });
+    }
+    return methodNotAllowed("PATCH, DELETE");
+  }
+
+  const listMatch = path.match(/^\/api\/portal\/admin\/cars\/([1-9]\d*)\/ledger$/);
+  if (!listMatch) return null;
+  const carId = parsePathId(listMatch[1]);
+  if (carId === null) return notFound();
+  const car = await getCarById(db, carId);
+  if (!car) return notFound();
+
+  if (method === "GET") {
+    const monthRaw = new URL(request.url).searchParams.get("month");
+    const month = parseLedgerMonth(monthRaw);
+    if (!month.ok) return validationError(month.fields);
+    const rows = await listLedgerEntries(
+      db,
+      carId,
+      month.value ? monthBounds(month.value) : undefined
+    );
+    const entries = rows.map(ledgerJson);
+    return json({ entries, month: month.value, totals: ledgerTotals(entries) });
+  }
+
+  if (method === "POST") {
+    const body = await readJson(request);
+    if (!body.ok) return body.response;
+    const parsed = parseLedgerCreate(body.value);
+    if (!parsed.ok) return validationError(parsed.fields);
+    let id: number;
+    try {
+      id = await insertLedgerEntry(db, carId, parsed.value, actorId);
+    } catch (error) {
+      const denied = await ledgerConstraint(error, db, carId);
+      if (denied) return denied;
+      throw error;
+    }
+    const row = await getLedgerEntry(db, carId, id);
+    if (!row) return json({ error: "server_error" }, 500);
+    return json({ entry: ledgerJson(row) }, 201);
+  }
+
+  return methodNotAllowed("GET, POST");
 }
 
 async function routeAdmin(
@@ -172,8 +291,12 @@ async function routeAdmin(
   db: PortalD1,
   env: PortalEnv,
   path: string,
-  method: string
+  method: string,
+  actorId: number
 ): Promise<Response> {
+  const ledger = await routeLedger(request, db, path, method, actorId);
+  if (ledger) return ledger;
+
   if (path === "/api/portal/admin/owners") {
     if (method === "GET") {
       const owners = await listOwners(db);
@@ -288,7 +411,14 @@ async function routeAdmin(
     if (method === "DELETE") {
       const existing = await getCarById(db, id);
       if (!existing) return notFound();
-      await deleteCar(db, id);
+      try {
+        await deleteCar(db, id);
+      } catch (error) {
+        if (isForeignKeyError(error)) {
+          return json({ error: "conflict", reason: "car_has_ledger" }, 409);
+        }
+        throw error;
+      }
       return json({ ok: true });
     }
     return methodNotAllowed("GET, PATCH, DELETE");

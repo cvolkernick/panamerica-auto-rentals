@@ -1,3 +1,5 @@
+import type { LedgerType } from "./ledger";
+
 export type OwnerJson = {
   id: number;
   name: string;
@@ -7,6 +9,24 @@ export type OwnerJson = {
   /** The owners.is_admin column. The admin form edits this. */
   storedAdmin: boolean;
   createdAt: string;
+};
+
+export type LedgerEntryJson = {
+  id: number;
+  carId: number;
+  entryDate: string;
+  type: LedgerType;
+  amountCents: number;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: number;
+};
+
+export type LedgerTotalsJson = {
+  incomeCents: number;
+  deductionCents: number;
+  netCents: number;
 };
 
 export type CarJson = {

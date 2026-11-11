@@ -17,6 +17,7 @@ import {
 } from "@/components/portal/ui";
 import type { CarJson, OwnerJson, PortalErrorJson, SessionJson } from "@/lib/portal/types";
 import { parseCarCreate, parseCarPatch, parseOwnerCreate, parseOwnerPatch } from "@/lib/portal/validate";
+import { CarLedger } from "./car-ledger";
 
 const primaryButton =
   "h-11 bg-red px-6 font-heading tracking-[0.18em] text-white uppercase hover:bg-red/90";
@@ -74,6 +75,7 @@ export function AdminPortal() {
   const [reloadToken, setReloadToken] = useState(0);
   const [inviteOwnerId, setInviteOwnerId] = useState<number | null>(null);
   const [invites, setInvites] = useState<Record<number, { url: string; copied: boolean }>>({});
+  const [ledgerCarId, setLedgerCarId] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -213,13 +215,18 @@ export function AdminPortal() {
     });
     setSaving(false);
     if (!result.ok) {
-      setMessage("Could not delete the car.");
+      setMessage(
+        result.status === 409
+          ? "This car has ledger entries. Delete those entries first."
+          : "Could not delete the car."
+      );
       return;
     }
     if (carId === id) {
       setCarId(null);
       setCarForm(emptyCar());
     }
+    if (ledgerCarId === id) setLedgerCarId(null);
     setMessage("Car deleted.");
     setReloadToken((value) => value + 1);
   }
@@ -262,6 +269,8 @@ export function AdminPortal() {
     );
   }
 
+  const ledgerCar = cars.find((car) => car.id === ledgerCarId) ?? null;
+
   return (
     <PortalShell
       eyebrow="Admin"
@@ -269,7 +278,8 @@ export function AdminPortal() {
       lede={
         <>
           Signed in as {email}. Add an owner, then assign each car to an owner. Create an
-          invite link so that owner can set a password.{" "}
+          invite link so that owner can set a password. Open Ledger on a car to record
+          income and costs.{" "}
           <Link href="/owner/" className="text-gold hover:underline">
             Your cars
           </Link>
@@ -503,21 +513,40 @@ export function AdminPortal() {
         {cars.length === 0 ? (
           <p className="mt-10 text-base leading-relaxed text-white/70">No cars yet.</p>
         ) : (
-          <ul className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <>
+            {ledgerCar ? (
+              <CarLedger car={ledgerCar} onClose={() => setLedgerCarId(null)} />
+            ) : null}
+            <ul className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {cars.map((car) => (
-              <li key={car.id} className="rounded-xl bg-navy-mid p-6 ring-1 ring-white/10">
+              <li
+                key={car.id}
+                className={`min-w-0 overflow-hidden rounded-xl bg-navy-mid p-6 ring-1 ${
+                  ledgerCarId === car.id ? "ring-gold" : "ring-white/10"
+                }`}
+              >
                 <p className="font-heading text-xs tracking-[0.28em] text-gold uppercase">
                   {car.year}
                 </p>
-                <h3 className="mt-2 text-2xl font-bold text-white">
+                <h3 className="mt-2 text-2xl font-bold wrap-anywhere text-white">
                   {car.make} {car.model}
                 </h3>
-                <p className="mt-3 text-base leading-relaxed text-white/80">
+                <p className="mt-3 min-w-0 text-base leading-relaxed wrap-anywhere text-white/80">
                   {car.ownerName ?? "Owner"} · {car.color}
                 </p>
                 <p className="mt-2 text-sm leading-relaxed text-white/70">Plate {car.licensePlate}</p>
-                <p className="mt-2 text-sm leading-relaxed text-white/70">VIN {car.vin}</p>
+                <p className="mt-2 min-w-0 text-sm leading-relaxed wrap-anywhere text-white/70">
+                  VIN {car.vin}
+                </p>
                 <div className="mt-6 flex flex-wrap gap-x-4 gap-y-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className={secondaryButton}
+                    onClick={() => setLedgerCarId(car.id)}
+                  >
+                    Ledger
+                  </Button>
                   <Button
                     type="button"
                     variant="outline"
@@ -551,6 +580,7 @@ export function AdminPortal() {
               </li>
             ))}
           </ul>
+          </>
         )}
       </section>
     </PortalShell>
