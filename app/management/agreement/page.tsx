@@ -1,56 +1,32 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import {
-  agreementBySlug,
+  agreementForPlan,
   agreementPdfHref,
   exhibitA,
   exhibitAPdfHref,
-  planAgreements,
   planDisclaimer,
   planDraftBanner,
 } from "@/lib/agreements";
 import { SITE_NAME, socialMetadata } from "@/lib/seo";
-import { getContactEmail } from "@/lib/site";
+import { getContactEmail, managementPlan } from "@/lib/site";
 
-type PageProps = {
-  params: Promise<{ slug: string }>;
+const doc = agreementForPlan(managementPlan);
+const description = `${doc.title} for ${SITE_NAME}. ${planDisclaimer}`;
+
+export const metadata: Metadata = {
+  title: doc.title,
+  description,
+  ...socialMetadata({
+    title: `${doc.title} · ${SITE_NAME}`,
+    description,
+    path: "/management/agreement",
+  }),
 };
 
-export function generateStaticParams() {
-  return planAgreements.map((doc) => ({ slug: doc.slug }));
-}
-
-export const dynamicParams = false;
-
-export async function generateMetadata({
-  params,
-}: PageProps): Promise<Metadata> {
-  const { slug } = await params;
-  const doc = agreementBySlug(slug);
-  if (!doc) {
-    return { title: "Agreement" };
-  }
-  const description = `${doc.title} for ${SITE_NAME}. ${planDisclaimer}`;
-  return {
-    title: doc.title,
-    description,
-    ...socialMetadata({
-      title: `${doc.title} · ${SITE_NAME}`,
-      description,
-      path: `/plans/${doc.slug}`,
-    }),
-  };
-}
-
-export default async function PlanAgreementPage({ params }: PageProps) {
-  const { slug } = await params;
-  const doc = agreementBySlug(slug);
-  if (!doc) {
-    notFound();
-  }
+export default function ManagementAgreementPage() {
   const email = getContactEmail();
   const pdfHref = agreementPdfHref(doc);
   const isDraft = doc.status !== "final";
@@ -58,7 +34,7 @@ export default async function PlanAgreementPage({ params }: PageProps) {
   return (
     <div className="mx-auto w-full min-w-0 max-w-3xl px-4 py-14 sm:px-6 sm:py-20">
       <p className="font-heading text-xs tracking-[0.28em] text-gold uppercase">
-        Owner plans
+        Fleet Management
       </p>
       <h1 className="mt-3 w-full max-w-full text-base font-bold leading-snug tracking-normal text-balance wrap-anywhere text-white sm:text-4xl sm:leading-tight sm:tracking-[0.12em] md:text-5xl">
         {doc.title}
@@ -113,7 +89,7 @@ export default async function PlanAgreementPage({ params }: PageProps) {
           variant="ghost"
           className="h-11 w-full px-5 font-heading tracking-[0.16em] text-white/70 uppercase hover:text-white sm:w-auto"
         >
-          <Link href={`/plans#${doc.slug}`}>Back to plans</Link>
+          <Link href="/management">Fleet Management</Link>
         </Button>
       </div>
 

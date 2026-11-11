@@ -112,13 +112,13 @@ export default function CyberfleetPage() {
 
         <section className={`${styles.glass} rounded-xl px-6 py-6 sm:px-8 sm:py-8`}>
           <p className="font-heading text-[0.7rem] tracking-[0.28em] text-[color:var(--cf-cyan)] uppercase">
-            What this rung is
+            What this is
           </p>
           <p className="mt-4 text-base leading-relaxed text-white/80">
-            Cyber Fleet is the fifth rung on the owner ladder, above Owner Exit:
-            a transition path for peer fleet operators and managers who want to
-            move a legacy rental-platform book toward an autonomous Cybercab network when
-            Tesla’s pieces are real. You keep earning on what works today. We
+            Cyber Fleet is a later path for peer fleet operators and managers
+            who want to move a legacy rental-platform book toward an autonomous
+            Cybercab network when Tesla’s pieces are real. It is separate from
+            the fleet management plan. You keep earning on what works today. We
             help you prepare the jump. The economics and Tesla implementation
             details stay Coming until they exist.
           </p>

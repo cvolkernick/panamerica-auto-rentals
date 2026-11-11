@@ -11,6 +11,8 @@ function source(path: string): string {
 test("sitemap source stays on the public paths", () => {
   const sitemap = source("app/sitemap.ts");
   assert.match(sitemap, /\/fleet/);
+  assert.match(sitemap, /\/management/);
+  assert.doesNotMatch(sitemap, /\/plans/);
   assert.doesNotMatch(sitemap, /\/owner/);
   assert.doesNotMatch(sitemap, /\/admin/);
 });
@@ -68,11 +70,22 @@ test("login is the signed-out portal shell and access jwt config is gone", () =>
   assert.doesNotMatch(source("migrations/0002_auth.sql"), /\$argon2id\$v=/);
 });
 
+test("old plans URLs redirect exactly and stay outside Functions", () => {
+  const redirects = source("public/_redirects");
+  assert.match(redirects, /^\/plans\s+\/management\s+301$/m);
+  assert.match(redirects, /^\/plans\/\s+\/management\/\s+301$/m);
+  assert.doesNotMatch(redirects, /\/plans\/\*/);
+  const routes = JSON.parse(source("public/_routes.json")) as FunctionRoutes;
+  for (const path of ["/plans", "/plans/", "/management", "/management/", "/plans/management-agreement.pdf"]) {
+    assert.equal(functionsInvokedFor(path, routes), false, path);
+  }
+});
+
 test("functions are not invoked for public routes", () => {
   const routes = JSON.parse(source("public/_routes.json")) as FunctionRoutes;
   assert.deepEqual(routes.include, ["/owner", "/owner/*", "/admin", "/admin/*", "/api/portal/*"]);
   assert.deepEqual(routes.exclude, []);
-  for (const path of ["/", "/fleet", "/fleet/", "/plans/", "/about", "/contact/", "/sitemap.xml", "/robots.txt"]) {
+  for (const path of ["/", "/fleet", "/fleet/", "/plans", "/plans/", "/management", "/management/", "/about", "/contact/", "/sitemap.xml", "/robots.txt"]) {
     assert.equal(functionsInvokedFor(path, routes), false, path);
   }
   for (const path of ["/owner", "/owner/", "/admin/", "/admin/index.html", "/api/portal/login", "/api/portal/logout", "/api/portal/session"]) {

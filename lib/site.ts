@@ -101,9 +101,9 @@ export const services = [
     accent: "green" as const,
     href: "/partners",
     linkLabel: "Fleet partners",
-    summary: "Fleet management and partner programs for vehicle owners.",
+    summary: "Fleet management for vehicle owners.",
     description:
-      "Vehicle owners can place a car in fleet management or a partner program. We look after readiness and turnover, listings on rental platforms, and getting a vehicle between service and the next trip. We do not publish fleet size, utilization rates, or vehicle inventories, and this site does not scrape rental platforms or publish prices, plates, or VINs.",
+      "Vehicle owners can place a car in fleet management. We look after readiness and turnover, listings on rental platforms, and getting a vehicle between service and the next trip. We do not publish fleet size, utilization rates, or vehicle inventories, and this site does not scrape rental platforms or publish prices, plates, or VINs.",
   },
 ] as const;
 
@@ -127,167 +127,30 @@ export const noLockInTeaser = {
   body: "Agreements are month-to-month from day one, with no minimum term. Either party can end with written notice; it takes effect at the end of the calendar month after the month notice is given.",
 } as const;
 
-/** Included on every fleet-management plan. Opportunities stays Coming. */
-export const fleetSpotlightIncluded = {
-  heading: "Spotlight included",
-  body: "Listing on the Panamerica site plus market insights. The Spotlight Opportunities feed ($25) is Coming — not live and not checkoutable until that feed exists.",
+/**
+ * The one public owner plan. Commission is our share of each trip.
+ * Rates are public pricing, not a substitute for the written agreement.
+ */
+export const managementPlan = {
+  slug: "management",
+  title: "Fleet Management",
+  accent: "red" as const,
+  summary:
+    "We run the car. Commission is our share of each trip, and the rate depends on how long that trip is.",
+  tiers: [
+    { rate: "20%", label: "Trips under 7 days" },
+    { rate: "15%", label: "Trips of 7–21 days" },
+    { rate: "10%", label: "Trips over 21 days" },
+  ],
+  details: [
+    {
+      heading: "What we do",
+      body: "Bookings, pricing, cleaning, setup, delivery, and day-to-day fleet operations.",
+    },
+  ],
 } as const;
 
-export const ownerPlans = [
-  {
-    slug: "spotlight",
-    kind: "self-serve" as const,
-    category: "Self-serve",
-    rung: 1,
-    title: "Spotlight",
-    accent: "gold" as const,
-    summary:
-      "You still run day-to-day yourself; we list the car for leads and share fleet/market insights — not fleet management.",
-    fee: "Per car / month flat fee",
-    details: [
-      {
-        heading: "Fee",
-        body: "Per car / month flat fee. You stay on your own day-to-day operations.",
-      },
-      {
-        heading: "What we do",
-        body: "We list the car for leads on the Fleet partners page and, on higher rungs, share anonymized fleet and market insights. This is not fleet management.",
-      },
-      {
-        heading: "What you do",
-        body: "You still run day-to-day yourself — bookings, guests, cleaning, and upkeep stay with you.",
-      },
-    ],
-    tiers: [
-      {
-        price: "$10",
-        name: "Listing only",
-        description: "Listing on the Fleet partners page.",
-        status: "available" as const,
-      },
-      {
-        price: "$15",
-        name: "Listing + insights",
-        description:
-          "Listing plus monthly anonymized fleet insights — earnings, expenses, and profitability-style intel.",
-        status: "available" as const,
-      },
-      {
-        price: "$25",
-        name: "Listing + insights + opportunity feed",
-        description:
-          "Listing, insights, and a vehicle-opportunity feed. Shown so the ladder is complete — fulfillment is gated until the feed exists.",
-        status: "coming" as const,
-      },
-    ],
-  },
-  {
-    slug: "standard-management",
-    kind: "fleet-management" as const,
-    category: "Fleet management",
-    rung: 2,
-    split: "80/20",
-    title: "Standard management",
-    accent: "red" as const,
-    ownerShare: "80%",
-    companyShare: "20%",
-    summary:
-      "Owner 80% / company 20%. You cover the car payment, insurance, and all maintenance. We run bookings, pricing, cleaning, setup, delivery, and day-to-day rental-platform and fleet operations.",
-    details: [
-      {
-        heading: "Split",
-        body: "Owner 80% / company 20%.",
-      },
-      {
-        heading: "Owner pays",
-        body: "Car payment, insurance, and all maintenance.",
-      },
-      {
-        heading: "Company provides",
-        body: "Bookings, pricing, cleaning, setup, delivery, and day-to-day rental-platform and fleet operations.",
-      },
-      fleetSpotlightIncluded,
-    ],
-  },
-  {
-    slug: "guaranteed-payment",
-    kind: "fleet-management" as const,
-    category: "Fleet management",
-    rung: 3,
-    split: "50/50",
-    title: "Guaranteed payment + shared OpEx",
-    accent: "blue" as const,
-    ownerShare: "50%",
-    companyShare: "50%",
-    summary:
-      "After shared expenses, remaining profit splits 50/50. The company guarantees only the owner's half of the monthly car payment, never insurance. Insurance always splits 50/50. Maintenance splits 50/50 up to $500/month total.",
-    details: [
-      {
-        heading: "Profit split",
-        body: "After shared expenses, remaining profit splits 50/50.",
-      },
-      {
-        heading: "Car payment",
-        body: "Split 50/50 and paid from revenue first. The company guarantees only the owner's half of the car payment: if the owner's share of a month's revenue does not cover it, the company makes up the difference. The guarantee never covers insurance.",
-      },
-      {
-        heading: "Insurance",
-        body: "Always split 50/50. The owner pays the owner's half regardless of revenue.",
-      },
-      {
-        heading: "Maintenance",
-        body: "Split 50/50 up to $500/month total ($250 each). Amounts above that monthly maximum come out of the owner's share before the profit split is paid.",
-      },
-      fleetSpotlightIncluded,
-    ],
-  },
-  {
-    slug: "owner-exit",
-    kind: "fleet-management" as const,
-    category: "Fleet management",
-    rung: 4,
-    split: "20/80",
-    title: "Owner exit",
-    accent: "green" as const,
-    ownerShare: "20%",
-    companyShare: "80%",
-    summary:
-      "Owner 20% / company 80%. The company pays the car payment and insurance in full. Maintenance stays 50/50 within the same $500/month cap until the car is paid off and title transfers to the company.",
-    details: [
-      {
-        heading: "Split",
-        body: "Owner 20% / company 80%.",
-      },
-      {
-        heading: "Car payment and insurance",
-        body: "The company pays the car payment and insurance in full.",
-      },
-      {
-        heading: "Maintenance",
-        body: "Split 50/50 within the $500/month total cap ($250 each).",
-      },
-      fleetSpotlightIncluded,
-      {
-        heading: "Term",
-        body: "Month-to-month from day one, with no minimum term. Either party can end with written notice, effective at the end of the calendar month after the month notice is given. If not ended sooner, it ends when the car is paid off in full, and ownership and title then transfer to the company.",
-      },
-    ],
-  },
-] as const;
-
-export type OwnerPlan = (typeof ownerPlans)[number];
-
-export function isSelfServePlan(
-  plan: OwnerPlan
-): plan is Extract<OwnerPlan, { kind: "self-serve" }> {
-  return plan.kind === "self-serve";
-}
-
-export function isFleetManagementPlan(
-  plan: OwnerPlan
-): plan is Extract<OwnerPlan, { kind: "fleet-management" }> {
-  return plan.kind === "fleet-management";
-}
+export type OwnerPlan = typeof managementPlan;
 
 export const fleetPartners = [
   {
@@ -345,7 +208,7 @@ export const nav = [
   { href: "/", label: "Home" },
   { href: "/fleet", label: "Fleet" },
   { href: "/services", label: "Services" },
-  { href: "/plans", label: "Plans" },
+  { href: "/management", label: "Fleet Management" },
   { href: "/drivers", label: "Drivers" },
   { href: "/partners", label: "Partners" },
   { href: "/about", label: "About" },

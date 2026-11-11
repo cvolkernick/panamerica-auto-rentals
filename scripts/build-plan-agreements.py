@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build labeled plan-agreement PDFs from data/agreements.json.
 
-The JSON is the single source. Do not copy /plans marketing copy into the
+The JSON is the single source. Do not copy /management marketing copy into the
 PDFs. After replacing a stub with an owner-final PDF, set status to "final"
 in the JSON and skip regenerating that file unless the owner asks.
 """
@@ -177,12 +177,7 @@ def main() -> int:
     banner = payload["draftBanner"]
     disclaimer = payload["disclaimer"]
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    expected = {
-        "spotlight",
-        "standard-management",
-        "guaranteed-payment",
-        "owner-exit",
-    }
+    expected = {"management"}
     slugs = {doc["slug"] for doc in payload["documents"]}
     if slugs != expected:
         print(f"slug mismatch: {sorted(slugs)} != {sorted(expected)}", file=sys.stderr)

@@ -89,8 +89,8 @@ export default function ServicesPage() {
           driver rentals
         </Link>
         . Placing a vehicle with us? See the{" "}
-        <Link href="/plans" className="text-gold hover:underline">
-          owner plans
+        <Link href="/management" className="text-gold hover:underline">
+          Fleet Management
         </Link>{" "}
         and{" "}
         <Link href="/partners" className="text-gold hover:underline">
@@ -110,7 +110,7 @@ export default function ServicesPage() {
           variant="outline"
           className="h-11 border-white/20 bg-transparent px-5 font-heading tracking-[0.16em] text-white uppercase hover:bg-white/10"
         >
-          <Link href="/plans">Owner plans</Link>
+          <Link href="/management">Fleet Management</Link>
         </Button>
         <Button
           asChild

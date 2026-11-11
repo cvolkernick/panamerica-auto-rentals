@@ -649,7 +649,7 @@ describe("password login", { concurrency: 1 }, () => {
     assert.equal(fleet.status, 200);
     assert.equal(await fleet.text(), "fleet");
 
-    for (const path of ["/", "/plans/", "/about/", "/owners", "/api/health"]) {
+    for (const path of ["/", "/plans/", "/management/", "/about/", "/owners", "/api/health"]) {
       let called = false;
       const response = await apexMiddleware({
         request: new Request(`https://panamericafleet.com${path}`),

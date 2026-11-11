@@ -174,8 +174,8 @@ export default function FleetPage() {
       <section className="mt-16 border-t border-white/10 pt-12">
         <p className="text-base leading-relaxed text-white/70">
           Own a car? See{" "}
-          <Link href="/plans" className="text-gold hover:underline">
-            owner plans
+          <Link href="/management" className="text-gold hover:underline">
+            Fleet Management
           </Link>{" "}
           or the{" "}
           <Link href="/partners" className="text-gold hover:underline">

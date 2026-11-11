@@ -4,10 +4,8 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  isFleetManagementPlan,
-  isSelfServePlan,
+  managementPlan,
   noLockInTeaser,
-  ownerPlans,
   planAccentBar,
   positioning,
   services,
@@ -145,13 +143,13 @@ export default function HomePage() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="font-heading text-xs tracking-[0.28em] text-gold uppercase">
-                Owner plans
+                Owner plan
               </p>
               <h2 className="mt-2 text-3xl font-bold text-white sm:text-4xl">
-                For owners, from a listing to a managed car
+                One management plan
               </h2>
               <p className="mt-3 max-w-2xl text-base leading-relaxed text-white/70">
-                These plans are for vehicle owners. To rent a car,{" "}
+                This plan is for vehicle owners. To rent a car,{" "}
                 <Link href="/fleet" className="text-gold hover:underline">
                   book direct
                 </Link>{" "}
@@ -159,9 +157,7 @@ export default function HomePage() {
                 <Link href="/drivers" className="text-gold hover:underline">
                   driver rentals
                 </Link>
-                . Spotlight is the entry rung for owners: you still run
-                day-to-day yourself. 80/20, 50/50, and Owner exit are the
-                management rungs — clear who pays what, and what share you keep.{" "}
+                . {managementPlan.summary}{" "}
                 <Link href="/partners" className="text-gold hover:underline">
                   Fleet partners
                 </Link>{" "}
@@ -172,50 +168,51 @@ export default function HomePage() {
               </p>
             </div>
             <Link
-              href="/plans"
+              href="/management"
               className="font-heading text-sm tracking-[0.16em] text-white/70 uppercase hover:text-white"
             >
-              Read the plans
+              Read the plan
             </Link>
           </div>
-          <div className="mt-8 grid gap-4 md:grid-cols-2">
-            {ownerPlans.map((plan) => (
-              <Card
-                key={plan.slug}
-                className="border-0 bg-navy-mid ring-white/10"
-              >
-                <CardHeader>
-                  <span
-                    aria-hidden
-                    className={cn(
-                      "mb-3 block h-1 w-12 rounded-full",
-                      planAccentBar[plan.accent]
-                    )}
-                  />
-                  <p className="font-heading text-[0.7rem] tracking-[0.2em] text-white/50 uppercase">
-                    {String(plan.rung).padStart(2, "0")} · {plan.category}
-                    {isSelfServePlan(plan)
-                      ? ` · from $10 / car / month`
-                      : ` · ${plan.split} · Owner ${plan.ownerShare} / company ${plan.companyShare}`}
-                  </p>
-                  <CardTitle className="font-heading text-xl tracking-[0.12em] text-white uppercase">
-                    <Link href={`/plans#${plan.slug}`} className="hover:text-gold">
-                      {plan.title}
-                    </Link>
-                  </CardTitle>
-                  <CardDescription className="text-base leading-relaxed text-white/70">
-                    {plan.summary}
-                    {isFleetManagementPlan(plan) ? (
-                      <span className="mt-3 block text-sm leading-relaxed text-white/55">
-                        Includes Spotlight listing + insights. Opportunities
-                        Coming.
+          <Card className="mt-8 border-0 bg-navy-mid ring-white/10">
+            <CardHeader>
+              <span
+                aria-hidden
+                className={cn(
+                  "mb-3 block h-1 w-12 rounded-full",
+                  planAccentBar[managementPlan.accent]
+                )}
+              />
+              <p className="font-heading text-[0.7rem] tracking-[0.2em] text-white/50 uppercase">
+                Commission by trip length
+              </p>
+              <CardTitle className="font-heading text-xl tracking-[0.12em] text-white uppercase">
+                <Link
+                  href="/management"
+                  className="hover:text-gold"
+                >
+                  {managementPlan.title}
+                </Link>
+              </CardTitle>
+              <CardDescription className="text-base leading-relaxed text-white/70">
+                <ul className="mt-1 grid gap-3 sm:grid-cols-3">
+                  {managementPlan.tiers.map((tier) => (
+                    <li
+                      key={tier.rate}
+                      className="rounded-lg bg-navy px-4 py-4 ring-1 ring-white/10"
+                    >
+                      <span className="block font-heading text-2xl tracking-[0.08em] text-gold">
+                        {tier.rate}
                       </span>
-                    ) : null}
-                  </CardDescription>
-                </CardHeader>
-              </Card>
-            ))}
-          </div>
+                      <span className="mt-1 block text-sm leading-relaxed text-white/75">
+                        {tier.label}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </CardDescription>
+            </CardHeader>
+          </Card>
         </div>
       </section>
     </div>
