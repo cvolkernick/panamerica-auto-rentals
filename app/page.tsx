@@ -8,15 +8,29 @@ import {
   noLockInTeaser,
   planAccentBar,
   positioning,
-  services,
 } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
-const serviceAccentBar: Record<(typeof services)[number]["accent"], string> = {
-  red: "bg-red",
-  blue: "bg-royal",
-  green: "bg-green",
-};
+const rentalTerms = [
+  {
+    title: "Short-term rentals",
+    accent: "bg-red",
+    description: "A car for a few days, ready when you need it.",
+    example: "A weekend trip, or a few days while your car is in the shop.",
+  },
+  {
+    title: "Mid-term rentals",
+    accent: "bg-royal",
+    description: "A car for a few weeks, with room to settle in.",
+    example: "A few weeks of work travel, or the time between cars.",
+  },
+  {
+    title: "Long-term rentals",
+    accent: "bg-green",
+    description: "A car for a month or more, when you want to stay a while.",
+    example: "A month or more of gig driving, or a seasonal stay.",
+  },
+] as const;
 
 export default function HomePage() {
   return (
@@ -80,7 +94,7 @@ export default function HomePage() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="font-heading text-xs tracking-[0.28em] text-gold uppercase">
-              What we do
+              What you need
             </p>
             <h2 className="mt-2 text-3xl font-bold text-white sm:text-4xl">
               By the day, week, or month
@@ -94,32 +108,22 @@ export default function HomePage() {
           </Link>
         </div>
         <div className="mt-8 grid gap-4 md:grid-cols-3">
-          {services.map((service) => (
+          {rentalTerms.map((term) => (
             <Card
-              key={service.slug}
+              key={term.title}
               className="border-0 bg-navy-mid ring-white/10"
             >
               <CardHeader>
                 <span
                   aria-hidden
-                  className={cn("mb-3 block h-1 w-12 rounded-full", serviceAccentBar[service.accent])}
+                  className={cn("mb-3 block h-1 w-12 rounded-full", term.accent)}
                 />
-                {"eyebrow" in service ? (
-                  <p className="font-heading text-[0.7rem] tracking-[0.2em] text-white/50 uppercase">
-                    {service.eyebrow}
-                  </p>
-                ) : null}
                 <CardTitle className="font-heading text-xl tracking-[0.12em] text-white uppercase">
-                  {service.title}
+                  {term.title}
                 </CardTitle>
                 <CardDescription className="text-base leading-relaxed text-white/70">
-                  {service.summary}
-                  <Link
-                    href={service.href}
-                    className="mt-3 block font-heading text-sm tracking-[0.16em] text-gold uppercase hover:text-white"
-                  >
-                    {service.linkLabel}
-                  </Link>
+                  {term.description}
+                  <span className="mt-3 block">{term.example}</span>
                 </CardDescription>
               </CardHeader>
             </Card>
@@ -143,25 +147,14 @@ export default function HomePage() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="font-heading text-xs tracking-[0.28em] text-gold uppercase">
-                Owner plan
+                Fleet Partners
               </p>
               <h2 className="mt-2 text-3xl font-bold text-white sm:text-4xl">
-                One management plan
+                Fleet management services
               </h2>
               <p className="mt-3 max-w-2xl text-base leading-relaxed text-white/70">
-                This plan is for vehicle owners. To rent a car,{" "}
-                <Link href="/fleet" className="text-gold hover:underline">
-                  book direct
-                </Link>{" "}
-                on the fleet or see{" "}
-                <Link href="/drivers" className="text-gold hover:underline">
-                  driver rentals
-                </Link>
-                . {managementPlan.summary}{" "}
-                <Link href="/partners" className="text-gold hover:underline">
-                  Fleet partners
-                </Link>{" "}
-                lists who we work with.
+                Let us match your high-quality cars with our high-quality
+                renters.
               </p>
               <p className="mt-3 max-w-2xl text-base leading-relaxed text-gold/90">
                 {noLockInTeaser.body}

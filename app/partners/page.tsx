@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { SITE_NAME, socialMetadata } from "@/lib/seo";
 import {
   fleetPartners,
-  managementPlan,
   planAccentBar,
   planAccentBorder,
 } from "@/lib/site";
@@ -33,64 +32,6 @@ export default function PartnersPage() {
       <h1 className="mt-3 text-4xl font-bold text-white sm:text-5xl">
         People we work with
       </h1>
-      <p className="mt-4 text-base leading-relaxed text-white/65">
-        Client rentals come first.{" "}
-        <Link href="/fleet" className="text-gold hover:underline">
-          Book direct
-        </Link>{" "}
-        on the fleet, or see{" "}
-        <Link href="/drivers" className="text-gold hover:underline">
-          driver rentals
-        </Link>{" "}
-        for gig and rideshare drivers in Fort Myers and Cape Coral. This page
-        is for vehicle owners and the people we work with.
-      </p>
-      <section className="mt-10" aria-label="Fleet management commission">
-        <article
-          className={cn(
-            "rounded-xl border-l-4 bg-navy-mid p-6 ring-1 ring-white/10 sm:p-8",
-            planAccentBorder[managementPlan.accent]
-          )}
-        >
-          <span
-            aria-hidden
-            className={cn(
-              "mb-4 block h-1 w-12 rounded-full",
-              planAccentBar[managementPlan.accent]
-            )}
-          />
-          <p className="font-heading text-[0.7rem] tracking-[0.22em] text-gold uppercase">
-            Commission by trip length
-          </p>
-          <h2 className="mt-2 text-2xl font-bold text-white">
-            <Link
-              href="/management"
-              className="hover:text-gold"
-            >
-              {managementPlan.title}
-            </Link>
-          </h2>
-          <ul className="mt-5 grid gap-3 sm:grid-cols-3">
-            {managementPlan.tiers.map((tier) => (
-              <li
-                key={tier.rate}
-                className="rounded-lg bg-navy px-4 py-4 ring-1 ring-white/10"
-              >
-                <p className="font-heading text-2xl tracking-[0.08em] text-gold">
-                  {tier.rate}
-                </p>
-                <p className="mt-2 text-sm leading-relaxed text-white/75">
-                  {tier.label}
-                </p>
-              </li>
-            ))}
-          </ul>
-          <p className="mt-4 text-base leading-relaxed text-white/80">
-            {managementPlan.firstMonth}
-          </p>
-        </article>
-      </section>
-
       <ul className="mt-10 grid gap-6">
         {fleetPartners.map((partner) => (
           <li key={partner.slug}>
@@ -174,8 +115,11 @@ export default function PartnersPage() {
 
       <div className="mt-10 rounded-xl bg-navy-mid p-6 ring-1 ring-white/10 sm:flex sm:items-center sm:justify-between sm:p-8">
         <p className="max-w-xl text-base leading-relaxed text-white/80">
-          One management plan. Commission is 20% under 7 days, 15% for 7–21
-          days, and 10% over 21 days. {managementPlan.firstMonth}
+          Join our fleet! Learn more about our{" "}
+          <Link href="/services" className="text-gold hover:underline">
+            services
+          </Link>{" "}
+          and how to work with us.
         </p>
         <Button
           asChild

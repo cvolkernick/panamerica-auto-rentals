@@ -27,23 +27,23 @@ function CarFacts({ car }: { car: CarJson }) {
     ["VIN", car.vin],
   ] as const;
   return (
-    <article className="rounded-xl bg-navy-mid p-6 ring-1 ring-white/10">
+    <article className="@container w-full min-w-0 rounded-xl bg-navy-mid p-6 ring-1 ring-white/10">
       <p className="font-heading text-xs tracking-[0.28em] text-gold uppercase">
         {car.year}
       </p>
-      <h2 className="mt-2 text-2xl font-bold text-white">
+      <h2 className="mt-2 text-2xl font-bold break-words text-white">
         {car.make} {car.model}
       </h2>
       <dl className="mt-6 divide-y divide-white/10">
         {facts.map(([term, value]) => (
           <div
             key={term}
-            className="grid gap-1 py-4 sm:grid-cols-[13rem_1fr] sm:items-baseline"
+            className="grid min-w-0 grid-cols-1 gap-1 py-4 @md:grid-cols-[minmax(0,9rem)_minmax(0,1fr)] @md:items-baseline"
           >
             <dt className="font-heading text-xs tracking-[0.16em] text-white/55 uppercase">
               {term}
             </dt>
-            <dd className="text-base text-white">{value}</dd>
+            <dd className="min-w-0 text-base text-white wrap-anywhere">{value}</dd>
           </div>
         ))}
       </dl>
@@ -140,7 +140,7 @@ export function OwnerPortal() {
       ) : (
         <ul className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {gate.cars.map((car) => (
-            <li key={car.id}>
+            <li key={car.id} className="min-w-0">
               <CarFacts car={car} />
             </li>
           ))}

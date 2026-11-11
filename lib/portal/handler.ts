@@ -21,6 +21,7 @@ import type { PortalD1 } from "./d1";
 import type { PortalEnv } from "./env";
 import { portalApexRedirect } from "./hosts";
 import { forbidden, json, readJson, validationError } from "./http";
+import { createOwnerInvite, handleInvite } from "./invite";
 import { authenticate, handleLogin, handleLogout, handleSetupPassword, requireCsrf } from "./login";
 import {
   parseCarCreate,
@@ -125,6 +126,7 @@ async function route(request: Request, env: PortalEnv): Promise<Response> {
 
   if (path === "/api/portal/login") return handleLogin(request, env, db);
   if (path === "/api/portal/setup-password") return handleSetupPassword(request, env, db);
+  if (path === "/api/portal/invite") return handleInvite(request, env, db);
 
   const auth = await authenticate(request, env, db);
   if (auth instanceof Response) return auth;
@@ -190,6 +192,14 @@ async function routeAdmin(
       });
     }
     return methodNotAllowed("GET, POST");
+  }
+
+  const inviteMatch = path.match(/^\/api\/portal\/admin\/owners\/([1-9]\d*)\/invite$/);
+  if (inviteMatch) {
+    const id = parsePathId(inviteMatch[1]);
+    if (id === null) return notFound();
+    if (method !== "POST") return methodNotAllowed("POST");
+    return createOwnerInvite(db, id);
   }
 
   const ownerMatch = path.match(/^\/api\/portal\/admin\/owners\/([1-9]\d*)$/);

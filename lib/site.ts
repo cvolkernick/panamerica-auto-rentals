@@ -38,7 +38,7 @@ export const legal = {
 export const introCallUrl = "https://calendar.app.google/Kpfn3aeKQ2VvZyeQ6";
 
 export const positioning =
-  "We rent clean, well-maintained vehicles by the day, week, or month to individuals and to gig and rideshare drivers in Fort Myers and Cape Coral. Fleet partner programs for vehicle owners are also available.";
+  "We rent clean, well-maintained vehicles by the day, week, or month, tailored to your need and budget.";
 
 export const about = {
   title: "Who we are",
@@ -74,7 +74,7 @@ export const about = {
 export const services = [
   {
     slug: "rentals",
-    title: "Rentals",
+    title: "Leisure Rentals",
     accent: "red" as const,
     href: "/fleet",
     linkLabel: "Book Direct",
@@ -136,7 +136,7 @@ export const managementPlan = {
   title: "Fleet Management",
   accent: "red" as const,
   summary:
-    "We run the car. Commission is our share of each trip, and the rate depends on how long that trip is.",
+    "We match your high-quality cars with our high-quality renters. Commission is our share of each trip, and the rate depends on how long that trip is.",
   tiers: [
     { rate: "20%", label: "Trips under 7 days" },
     { rate: "15%", label: "Trips of 7–21 days" },
