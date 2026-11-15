@@ -48,6 +48,18 @@ export type FleetVehicle = {
    * false = card stays, shows "Currently unavailable", NO booking buttons.
    */
   listed: boolean;
+  /**
+   * Public daily rate in whole US dollars. The card shows it as "$89/day".
+   * Omit it and the card shows no price.
+   */
+  dailyRateUsd?: number;
+  /**
+   * Security deposit in whole US dollars.
+   * 0 means no deposit, and the card renders no deposit line.
+   * Omit it when the car has no public deposit. A positive amount renders
+   * as "$500 deposit".
+   */
+  depositUsd?: number;
   links: BookingLinks;
 };
 
@@ -123,6 +135,22 @@ export function vehicleEyebrow(vehicle: Pick<FleetVehicle, "location" | "partner
     : vehicle.location;
 }
 
+/** "$89/day", or null when the card has no public daily rate. */
+export function dailyRateLabel(dailyRateUsd: number | undefined): string | null {
+  if (dailyRateUsd == null) return null;
+  return `$${dailyRateUsd}/day`;
+}
+
+/**
+ * Deposit line for a fleet card. 0 and omitted both mean no deposit line,
+ * which is how every public card treats a deposit today. A positive amount
+ * is "$500 deposit".
+ */
+export function depositLabel(depositUsd: number | undefined): string | null {
+  if (depositUsd == null || depositUsd === 0) return null;
+  return `$${depositUsd} deposit`;
+}
+
 /**
  * Fleet listing. Adding a car is a data entry: photo under `public/fleet/`
  * plus a row here.
@@ -178,8 +206,11 @@ export const fleetVehicles: readonly FleetVehicle[] = [
     photoAlt: "2023 Rivian R1S SUV in yellow",
     location: "Cape Coral",
     partner: null,
-    listed: false,
+    listed: true,
+    dailyRateUsd: 89,
+    depositUsd: 0,
     links: {
+      direct: { wheelbaseRentalId: "570552", enabled: true },
       turo: "https://turo.com/us/en/suv-rental/united-states/cape-coral-fl/rivian/r1s/3881079",
     },
   },
