@@ -41,18 +41,19 @@ test("2023 Rivian R1S card is available at $89/day with no deposit", () => {
   assert.equal(rivian.links.turo, bookTuro);
   assert.equal(rivian.links.ride, undefined);
   assert.equal(rivian.links.direct?.wheelbaseRentalId, "570552");
-  assert.equal(rivian.links.direct?.enabled, true);
+  assert.equal(rivian.links.direct?.enabled, false);
+  assert.equal(wheelbaseBookingUrl("570552"), widgetUrl);
 
   const buttons = bookingButtons(rivian);
-  assert.equal(buttons[0]?.kind, "direct");
-  assert.equal(buttons[1]?.kind, "link");
-  if (buttons[0]?.kind !== "direct" || buttons[1]?.kind !== "link") return;
-  assert.equal(buttons[0].rentalId, "570552");
-  assert.equal(buttons[0].label, "Book Direct");
-  assert.equal(wheelbaseBookingUrl(buttons[0].rentalId), widgetUrl);
-  assert.equal(buttons[1].label, "Book on Turo");
-  assert.equal(buttons[1].href, bookTuro);
-  assert.equal(buttons.length, 2);
+  assert.deepEqual(
+    buttons.map((button) => button.label),
+    ["Book on Turo"]
+  );
+  assert.equal(buttons[0]?.kind, "link");
+  if (buttons[0]?.kind !== "link") return;
+  assert.equal(buttons[0].label, "Book on Turo");
+  assert.equal(buttons[0].href, bookTuro);
+  assert.equal(buttons.some((button) => button.kind === "direct"), false);
 
   const corollaId = vehicle("corolla-2022").links.direct?.wheelbaseRentalId;
   assert.ok(corollaId);

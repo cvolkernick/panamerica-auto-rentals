@@ -210,7 +210,7 @@ export const fleetVehicles: readonly FleetVehicle[] = [
     dailyRateUsd: 89,
     depositUsd: 0,
     links: {
-      direct: { wheelbaseRentalId: "570552", enabled: true },
+      direct: { wheelbaseRentalId: "570552", enabled: false },
       turo: "https://turo.com/us/en/suv-rental/united-states/cape-coral-fl/rivian/r1s/3881079",
     },
   },
