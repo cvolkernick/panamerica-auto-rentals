@@ -21,18 +21,23 @@ function vehicle(slug: string): FleetVehicle {
   return found;
 }
 
-test("2023 Rivian R1S card is available at $89/day with no deposit", () => {
+test("2023 Rivian R1S card is available and shows no price", () => {
   const rivian = vehicle("r1s-2023");
   assert.equal(rivian.year, 2023);
   assert.equal(rivian.make, "Rivian");
   assert.equal(rivian.model, "R1S");
   assert.equal(rivian.listed, true);
-  assert.equal(rivian.dailyRateUsd, 89);
-  assert.equal(rivian.depositUsd, 0);
-  assert.equal(dailyRateLabel(rivian.dailyRateUsd), "$89/day");
+  assert.equal(rivian.dailyRateUsd, undefined);
+  assert.equal(rivian.depositUsd, undefined);
+  assert.equal(dailyRateLabel(rivian.dailyRateUsd), null);
   assert.equal(depositLabel(rivian.depositUsd), null);
-  assert.equal(depositLabel(undefined), null);
-  assert.equal(depositLabel(500), "$500 deposit");
+
+  for (const car of fleetVehicles) {
+    assert.equal(car.dailyRateUsd, undefined, car.slug);
+    assert.equal(car.depositUsd, undefined, car.slug);
+    assert.equal(dailyRateLabel(car.dailyRateUsd), null, car.slug);
+    assert.equal(depositLabel(car.depositUsd), null, car.slug);
+  }
 
   const bookTuro =
     "https://turo.com/us/en/suv-rental/united-states/cape-coral-fl/rivian/r1s/3881079";
@@ -63,12 +68,14 @@ test("2023 Rivian R1S card is available at $89/day with no deposit", () => {
   assert.equal(source("components/book-direct-button.tsx").includes("wheelbaseBookingUrl(rentalId)"), true);
 
   const page = source("app/fleet/page.tsx");
-  assert.match(page, /dailyRateLabel\(vehicle\.dailyRateUsd\)/);
-  assert.match(page, /depositLabel\(vehicle\.depositUsd\)/);
-  assert.match(page, /data-daily-rate/);
-  assert.match(page, /data-deposit/);
-  assert.match(page, /\{rate \? \(/);
-  assert.match(page, /\{deposit \? \(/);
+  assert.doesNotMatch(page, /dailyRateLabel/);
+  assert.doesNotMatch(page, /depositLabel/);
+  assert.doesNotMatch(page, /data-daily-rate/);
+  assert.doesNotMatch(page, /data-deposit/);
+  assert.doesNotMatch(page, /\$\d+/);
+  assert.doesNotMatch(page, /\/day/);
+  assert.doesNotMatch(page, /deposit/i);
+  assert.match(page, /const spacing = i === 0 \? "mt-6" : "mt-3"/);
   assert.match(page, /\{!vehicle\.listed && \([\s\S]*Currently unavailable/);
   assert.equal(page.includes("Currently unavailable"), true);
   assert.match(page, /<BookDirectButton[\s\S]*rentalId=\{button\.rentalId\}/);

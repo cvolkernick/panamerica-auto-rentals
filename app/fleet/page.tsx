@@ -9,8 +9,6 @@ import { BookDirectButton } from "@/components/book-direct-button";
 import { Button } from "@/components/ui/button";
 import {
   bookingButtons,
-  dailyRateLabel,
-  depositLabel,
   fleetVehicles,
   vehicleEyebrow,
   vehicleName,
@@ -69,8 +67,6 @@ export default function FleetPage() {
           const name = vehicleName(vehicle);
           // Buttons come only from data/fleet.ts (listed + links).
           const buttons = bookingButtons(vehicle);
-          const rate = dailyRateLabel(vehicle.dailyRateUsd);
-          const deposit = depositLabel(vehicle.depositUsd);
           const hasDirect = buttons.some((b) => b.key === "direct");
           const firstLink = buttons.find((b) => b.kind === "link");
           const photoHref = firstLink?.kind === "link" ? firstLink.href : undefined;
@@ -127,16 +123,6 @@ export default function FleetPage() {
                   <p className="mt-2 mb-auto text-base leading-relaxed text-white/70">
                     {vehicle.descriptor}
                   </p>
-                  {rate ? (
-                    <p data-daily-rate className="mt-6 text-lg font-bold text-white">
-                      {rate}
-                    </p>
-                  ) : null}
-                  {deposit ? (
-                    <p data-deposit className="mt-1 text-sm leading-relaxed text-white/70">
-                      {deposit}
-                    </p>
-                  ) : null}
                   {!vehicle.listed && (
                     <p
                       className="mt-6 flex h-11 w-full items-center justify-center rounded-md border border-white/15 font-heading text-sm tracking-[0.16em] text-white/60 uppercase"
@@ -149,7 +135,7 @@ export default function FleetPage() {
                     // Book Direct is primary when present; otherwise the first
                     // platform keeps the existing red style (unchanged look).
                     const primary = hasDirect ? button.primary : i === 0;
-                    const spacing = i === 0 && !rate && !deposit ? "mt-6" : "mt-3";
+                    const spacing = i === 0 ? "mt-6" : "mt-3";
                     if (button.kind === "direct") {
                       return (
                         <BookDirectButton
