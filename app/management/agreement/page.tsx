@@ -8,7 +8,6 @@ import {
   exhibitA,
   exhibitAPdfHref,
   planDisclaimer,
-  planDraftBanner,
 } from "@/lib/agreements";
 import { SITE_NAME, socialMetadata } from "@/lib/seo";
 import { getContactEmail, managementPlan } from "@/lib/site";
@@ -29,7 +28,6 @@ export const metadata: Metadata = {
 export default function ManagementAgreementPage() {
   const email = getContactEmail();
   const pdfHref = agreementPdfHref(doc);
-  const isDraft = doc.status !== "final";
 
   return (
     <div className="mx-auto w-full min-w-0 max-w-3xl px-4 py-14 sm:px-6 sm:py-20">
@@ -42,20 +40,6 @@ export default function ManagementAgreementPage() {
       <p className="mt-3 text-base leading-relaxed text-white/65">
         {doc.subtitle}
       </p>
-
-      {isDraft ? (
-        <aside
-          className="mt-8 rounded-xl border border-red/40 bg-red/10 px-5 py-4 ring-1 ring-red/20 sm:px-6"
-          role="status"
-        >
-          <p className="font-heading text-[0.7rem] tracking-[0.22em] text-gold uppercase">
-            Draft
-          </p>
-          <p className="mt-2 text-sm leading-relaxed wrap-anywhere text-white/80">
-            {planDraftBanner}
-          </p>
-        </aside>
-      ) : null}
 
       <div className="mt-8 flex min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap">
         <Button

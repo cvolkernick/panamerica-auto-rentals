@@ -20,11 +20,6 @@ export function PlanAgreementLinks({ plan }: { plan: OwnerPlan }) {
       >
         Review the agreement
       </Link>
-      {agreement.status !== "final" ? (
-        <span className="rounded-full bg-gold/15 px-2.5 py-1 font-heading text-[0.65rem] tracking-[0.18em] text-gold uppercase">
-          Draft
-        </span>
-      ) : null}
       <a
         href={agreementPdfHref(agreement)}
         download={agreement.pdfFile}

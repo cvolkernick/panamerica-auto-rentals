@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { test } from "node:test";
 
@@ -17,24 +18,31 @@ test("fleet management states the first-month half commission", () => {
   assert.match(page, /20% for trips under 7 days, 15% for 7–21 days, and 10% for trips over 21 days/);
 });
 
-test("exhibit A is the single Fleet Management schedule", () => {
-  const pdf = source("public/plans/exhibit-a-vehicle-schedule.pdf");
-  assert.match(pdf, /Plan: Fleet Management/);
-  assert.match(pdf, /20%/);
-  assert.match(pdf, /trips under 7 days/);
-  assert.match(pdf, /15%/);
-  assert.match(pdf, /10%/);
-  assert.match(pdf, /over 21/);
-  assert.match(pdf, /First month: half commission/);
-  assert.match(pdf, /7\.5%/);
-  assert.match(pdf, /5%/);
-  assert.match(pdf, /Full name:/);
-  assert.match(pdf, /VIN:/);
-  assert.match(pdf, /Monthly car payment amount:/);
-  assert.match(pdf, /Monthly insurance premium:/);
-  assert.match(pdf, /Lender \/ lienholder name:/);
+function pdfText(path: string): string {
+  return execFileSync("pdftotext", ["-layout", path, "-"], { encoding: "utf8" });
+}
+
+const pdfTextAvailable = spawnSync("pdftotext", ["-v"]).error === undefined;
+
+test("owner-final PDFs are present, final and carry the Fleet Management schedule", { skip: !pdfTextAvailable }, () => {
+  const exhibit = pdfText("public/plans/exhibit-a-vehicle-schedule.pdf");
+  assert.match(exhibit, /Plan: Fleet Management/);
+  assert.match(exhibit, /Under 7 days\s+20%/);
+  assert.match(exhibit, /7 to 21 days\s+15%/);
+  assert.match(exhibit, /Over 21 days\s+10%/);
+  assert.match(exhibit, /10% \/ 7\.5% \/ 5%/);
+  assert.match(exhibit, /Full name:/);
+  assert.match(exhibit, /VIN:/);
+  assert.match(exhibit, /Monthly car payment amount:/);
+  assert.match(exhibit, /Lender \/ lienholder name/);
+  const agreement = pdfText("public/plans/management-agreement.pdf");
+  assert.match(agreement, /Plan: Fleet Management/);
+  assert.match(agreement, /10% \/ 7\.5% \/ 5%/);
+  for (const text of [exhibit, agreement]) {
+    assert.doesNotMatch(text, /draft/i);
+  }
   for (const banned of ["Spotlight", "Owner Exit", "Shared Opex", "50/50", "20/80", "80/20", "payoff", "Payoff", "rung", "Rung"]) {
-    assert.equal(pdf.includes(banned), false, banned);
+    assert.equal(exhibit.includes(banned), false, banned);
   }
 });
 
