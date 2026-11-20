@@ -1,7 +1,7 @@
 import agreementsData from "@/data/agreements.json";
 import { managementPlan, type OwnerPlan } from "@/lib/site";
 
-export type AgreementStatus = "draft" | "final";
+export type AgreementStatus = "final";
 
 export type PlanAgreement = {
   slug: string;
@@ -15,7 +15,6 @@ export type PlanAgreement = {
 };
 
 export const planDisclaimer = agreementsData.disclaimer;
-export const planDraftBanner = agreementsData.draftBanner;
 
 export const planAgreements = agreementsData.documents as PlanAgreement[];
 

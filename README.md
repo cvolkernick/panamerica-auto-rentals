@@ -94,20 +94,14 @@ Do not add Yelp until a public URL is in `localListings`. Do not add these links
 
 ## Plan agreements (release checklist)
 
-`/management` marketing copy and the fleet management agreement must ship together. If you change the public commission on `/management`, re-check the document in `data/agreements.json` and regenerate the draft PDF:
+`/management` marketing copy and the fleet management agreement must ship together. If you change the public commission on `/management`, re-check the owner-final documents in `public/plans/` and `data/agreements.json`.
 
-```bash
-python3 scripts/build-plan-agreements.py
-```
-
-Do **not** reconstruct agreement clauses from the marketing copy. Owner-final PDFs attached on the tracking issue replace the labeled drafts; set `status` to `"final"` only after the owner marks them final. Draft files must stay labeled DRAFT until then — they are not a live offer.
+The PDFs in `public/plans/` are the owner-final documents (Final v2026-11-19). They are supplied files, not generated: replace them with the next owner-final version rather than rebuilding them from the marketing copy. Do not reconstruct agreement clauses from the marketing copy.
 
 | Plan | Viewer | PDF |
 |------|--------|-----|
 | Fleet Management | `/management/agreement` | `/plans/management-agreement.pdf` |
 | Exhibit A | — | `/plans/exhibit-a-vehicle-schedule.pdf` |
-
-The fleet management agreement PDF is a generated draft (`"pdfSource": "generated"`). Exhibit A is generated from `scripts/build-exhibit-a.py` (`python3 scripts/build-exhibit-a.py`). `scripts/build-plan-agreements.py` skips any document marked `"pdfSource": "owner"` so a regenerate cannot overwrite it.
 
 ## Legal line
 

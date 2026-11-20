@@ -1,6 +1,5 @@
 {
   "disclaimer": "This page is general information about our services, not legal or tax advice. A written agreement confirms terms for any vehicle.",
-  "draftBanner": "DRAFT -- not a live offer. It is not legal or tax advice and is not an offer to contract.",
   "exhibitA": {
     "title": "Exhibit A (Vehicle Schedule)",
     "pdfFile": "exhibit-a-vehicle-schedule.pdf"
@@ -11,12 +10,12 @@
       "title": "Fleet management agreement",
       "subtitle": "Commission by trip length",
       "pdfFile": "management-agreement.pdf",
-      "pdfSource": "generated",
-      "status": "draft",
+      "pdfSource": "owner",
+      "status": "final",
       "paragraphs": [
         "This document is the written Fleet management agreement for Panamerica Auto, LLC (trade name Panamerica Auto Rentals).",
         "Read the full agreement (PDF) and Exhibit A (Vehicle Schedule).",
-        "When the owner-final document is published, this file is the single source for the Fleet management agreement. The public commission rates on /management are the published price; the written agreement confirms the terms for a vehicle.",
+        "This file is the single source for the Fleet management agreement. The public commission rates on /management are the published price; the written agreement confirms the terms for a vehicle.",
         "To review current terms or place a vehicle, write panamerica.cars@gmail.com."
       ]
     }
