@@ -13,6 +13,8 @@ import {
 } from "@/components/portal/ui";
 import type { CarJson, SessionJson } from "@/lib/portal/types";
 
+import { CarMoney } from "../admin/car-money";
+
 type Gate =
   | { kind: "loading" }
   | { kind: "signed-out" }
@@ -138,10 +140,11 @@ export function OwnerPortal() {
       {gate.cars.length === 0 ? (
         <p className="mt-10 text-base leading-relaxed text-white/70">No cars yet.</p>
       ) : (
-        <ul className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <ul className="mt-10 grid gap-10">
           {gate.cars.map((car) => (
             <li key={car.id} className="min-w-0">
               <CarFacts car={car} />
+              <CarMoney carId={car.id} mode="owner" />
             </li>
           ))}
         </ul>

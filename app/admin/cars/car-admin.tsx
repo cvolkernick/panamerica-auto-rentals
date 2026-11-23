@@ -21,6 +21,7 @@ import type { CarJson, OwnerJson, PortalErrorJson, SessionJson } from "@/lib/por
 import { parseCarPatch } from "@/lib/portal/validate";
 
 import { CarLedger } from "../car-ledger";
+import { CarMoney } from "../car-money";
 
 const primaryButton =
   "h-11 bg-red px-6 font-heading tracking-[0.18em] text-white uppercase hover:bg-red/90";
@@ -269,6 +270,12 @@ export function CarAdmin() {
       actions={
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <BackToAdmin />
+          <Link
+            href="/admin/imports/"
+            className="font-heading text-sm tracking-[0.16em] text-gold uppercase hover:text-white"
+          >
+            Trip import
+          </Link>
           <PortalLogout onDone={() => setReloadToken((value) => value + 1)} />
         </div>
       }
@@ -310,6 +317,7 @@ export function CarAdmin() {
       </div>
 
       <CarLedger car={car} />
+      <CarMoney carId={car.id} mode="admin" />
 
       <section className="mt-14" aria-labelledby="car-edit-title">
         <h2 id="car-edit-title" className="text-2xl font-bold text-white">

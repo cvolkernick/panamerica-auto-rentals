@@ -20,6 +20,35 @@ function rememberCsrf(data: unknown) {
   if (typeof token === "string") csrfToken = token;
 }
 
+export async function portalUpload<T>(path: string, form: FormData): Promise<PortalResult<T>> {
+  const headers: Record<string, string> = { accept: "application/json" };
+  if (csrfToken) headers["x-csrf-token"] = csrfToken;
+  try {
+    const response = await fetch(path, {
+      method: "POST",
+      headers,
+      body: form,
+      cache: "no-store",
+      credentials: "same-origin",
+    });
+    const data = (await response.json().catch(() => null)) as T | PortalErrorJson | null;
+    if (response.status === 401) csrfToken = "";
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: response.status,
+        data: null,
+        error: data && typeof data === "object" ? (data as PortalErrorJson) : null,
+        network: false,
+      };
+    }
+    rememberCsrf(data);
+    return { ok: true, status: response.status, data: data as T, error: null, network: false };
+  } catch {
+    return { ok: false, status: 0, data: null, error: null, network: true };
+  }
+}
+
 export async function portalRequest<T>(
   path: string,
   init?: { method?: string; body?: unknown }

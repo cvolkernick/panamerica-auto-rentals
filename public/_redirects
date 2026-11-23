@@ -7,3 +7,4 @@
 /plans   /management   301
 /plans/  /management/  301
 /admin/cars/*  /admin/cars/  200
+/admin/imports/*  /admin/imports/  200

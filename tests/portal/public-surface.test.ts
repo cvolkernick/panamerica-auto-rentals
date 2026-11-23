@@ -85,6 +85,7 @@ test("portal pages ask robots not to index", () => {
     "app/owner/page.tsx",
     "app/admin/page.tsx",
     "app/admin/cars/page.tsx",
+    "app/admin/imports/page.tsx",
     "app/owner/invite/page.tsx",
   ]) {
     assert.match(source(path), /noindex/);
@@ -141,9 +142,11 @@ test("old plans URLs redirect exactly and stay outside Functions", () => {
 test("functions are not invoked for public routes", () => {
   const routes = JSON.parse(source("public/_routes.json")) as FunctionRoutes;
   assert.deepEqual(routes.include, ["/owner", "/owner/*", "/admin", "/admin/*", "/api/portal/*"]);
-  assert.deepEqual(routes.exclude, ["/admin/cars/*"]);
+  assert.deepEqual(routes.exclude, ["/admin/cars/*", "/admin/imports/*"]);
   assert.equal(functionsInvokedFor("/admin/cars/ABC1234", routes), false);
   assert.equal(functionsInvokedFor("/admin/cars/ABC1234/", routes), false);
+  assert.equal(functionsInvokedFor("/admin/imports/1", routes), false);
+  assert.equal(functionsInvokedFor("/admin/imports/1/", routes), false);
   assert.equal(functionsInvokedFor("/api/portal/admin/cars/by-plate/ABC1234", routes), true);
   for (const path of ["/", "/fleet", "/fleet/", "/plans", "/plans/", "/management", "/management/", "/about", "/contact/", "/sitemap.xml", "/robots.txt"]) {
     assert.equal(functionsInvokedFor(path, routes), false, path);

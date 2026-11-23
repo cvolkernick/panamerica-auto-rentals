@@ -214,10 +214,15 @@ export function AdminPortal() {
     });
     setSaving(false);
     if (!result.ok) {
+      const reason = result.error?.reason;
       setMessage(
-        result.status === 409
-          ? "This car has ledger entries. Delete those entries first."
-          : "Could not delete the car."
+        reason === "car_has_trips"
+          ? "This car has imported trips, so it stays."
+          : reason === "car_has_expenses"
+            ? "This car has expenses. Delete those expenses first."
+            : reason === "car_has_ledger"
+              ? "This car has ledger entries. Delete those entries first."
+              : "Could not delete the car."
       );
       return;
     }
@@ -282,7 +287,17 @@ export function AdminPortal() {
           .
         </>
       }
-      actions={<PortalLogout onDone={() => setReloadToken((value) => value + 1)} />}
+      actions={
+        <div className="flex flex-wrap items-center gap-4">
+          <Link
+            href="/admin/imports/"
+            className="font-heading text-sm tracking-[0.16em] text-gold uppercase hover:text-white"
+          >
+            Trip import
+          </Link>
+          <PortalLogout onDone={() => setReloadToken((value) => value + 1)} />
+        </div>
+      }
     >
       {message ? <PortalNotice>{message}</PortalNotice> : null}
 

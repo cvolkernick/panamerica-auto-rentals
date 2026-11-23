@@ -1,3 +1,4 @@
+import type { ExpenseCategory } from "./expenses";
 import type { LedgerType } from "./ledger";
 
 export type OwnerJson = {
@@ -27,6 +28,64 @@ export type LedgerTotalsJson = {
   incomeCents: number;
   deductionCents: number;
   netCents: number;
+};
+
+export type ExpenseJson = {
+  id: number;
+  carId: number;
+  entryDate: string;
+  category: ExpenseCategory;
+  amountCents: number;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: number;
+};
+
+export type MoneyTotalsJson = {
+  payoutCents: number;
+  taxCents: number | null;
+  incomeCents: number;
+  expenseCents: number;
+  netCents: number;
+  grossCents: number | null;
+  platformFeesCents: number | null;
+  pendingPayoutCents: number;
+  pendingTripCount: number;
+};
+
+export type MoneyTripJson = {
+  id: number;
+  platform: string;
+  externalTripId: string;
+  startAt: string | null;
+  endAt: string | null;
+  startDate: string;
+  endDate: string | null;
+  status: string;
+  countsAsIncome: boolean;
+  grossCents: number | null;
+  platformFeesCents: number | null;
+  payoutCents: number;
+  taxCents: number | null;
+  pendingPayoutCents: number | null;
+  hasPending: boolean;
+};
+
+export type MoneyReportJson = {
+  month: string;
+  attribution: string;
+  monthTotals: MoneyTotalsJson;
+  toDate: MoneyTotalsJson;
+  allTime: MoneyTotalsJson;
+  platforms: {
+    platform: string;
+    payoutCents: number;
+    taxCents: number | null;
+    incomeCents: number;
+  }[];
+  trips: MoneyTripJson[];
+  expenses: ExpenseJson[];
 };
 
 export type CarJson = {
