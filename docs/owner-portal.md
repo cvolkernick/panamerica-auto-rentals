@@ -53,9 +53,10 @@ npx wrangler d1 execute panamerica-portal --remote --file=migrations/0002_auth.s
 npx wrangler d1 execute panamerica-portal --remote --file=migrations/0003_owner_invites.sql
 npx wrangler d1 execute panamerica-portal --remote --file=migrations/0004_car_ledger.sql
 npx wrangler d1 execute panamerica-portal --remote --file=migrations/0005_trips_expenses.sql
+npx wrangler d1 execute panamerica-portal --remote --file=migrations/0006_payouts.sql
 ```
 
-`0001` creates `owners` and `cars` and inserts only the Panamerica owner. It does not insert cars. `0002` adds `password_hash`, `sessions`, and `login_attempts`. It does not set a password. `0003` adds `owner_invites` and does not insert a token. `0004` adds `car_ledger` and does not insert entries. `0005` adds trip import tables and expenses. It does not insert trips. Run each file once. Running one again fails on the existing tables, which is what you want. If `0001` through `0004` were already applied, run only `0005`. Apply `0005` only after the money change is approved, and do it by hand. Do not apply it from a deploy, and do not apply it while the implementation pull request is still open.
+`0001` creates `owners` and `cars` and inserts only the Panamerica owner. It does not insert cars. `0002` adds `password_hash`, `sessions`, and `login_attempts`. It does not set a password. `0003` adds `owner_invites` and does not insert a token. `0004` adds `car_ledger` and does not insert entries. `0005` adds trip import tables and expenses. It does not insert trips. Run each file once. Running one again fails on the existing tables, which is what you want. If `0001` through `0004` were already applied, run only `0005`. Apply `0005` only after the money change is approved, and do it by hand. Do not apply it from a deploy, and do not apply it while the implementation pull request is still open. `0006` adds `payouts` (owner payout records, no bank or account details) and inserts nothing. Apply it by hand after the statement change is approved and before that code is deployed: the statement and car-delete routes read `payouts`.
 
 ## 3. Bind D1 on the Pages project
 
@@ -132,6 +133,7 @@ npx wrangler d1 execute panamerica-portal --local --file=migrations/0002_auth.sq
 npx wrangler d1 execute panamerica-portal --local --file=migrations/0003_owner_invites.sql
 npx wrangler d1 execute panamerica-portal --local --file=migrations/0004_car_ledger.sql
 npx wrangler d1 execute panamerica-portal --local --file=migrations/0005_trips_expenses.sql
+npx wrangler d1 execute panamerica-portal --local --file=migrations/0006_payouts.sql
 ```
 
 `.dev.vars` (do not commit):

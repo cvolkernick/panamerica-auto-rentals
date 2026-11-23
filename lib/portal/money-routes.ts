@@ -21,7 +21,22 @@ import {
 } from "./money-store";
 import { createImportPreview } from "./import/service";
 import type { CsvFile, ImportUpload } from "./import/types";
-import { parseExpenseCreate, parseExpensePatch, parseLedgerMonth, type ExpenseWrite } from "./validate";
+import {
+  carStatement,
+  deletePayout,
+  getPayout,
+  insertPayout,
+  listPayouts,
+  payoutJson,
+} from "./statement-store";
+import type { CarRow } from "./db";
+import {
+  parseExpenseCreate,
+  parseExpensePatch,
+  parseLedgerMonth,
+  parsePayoutCreate,
+  type ExpenseWrite,
+} from "./validate";
 
 const MAX_CSV_BYTES = 5 * 1024 * 1024;
 
@@ -223,6 +238,16 @@ export async function routeOwnerMoney(
     if (!car) return notFound();
     return reportResponse(request, db, id);
   }
+  const statementMatch = path.match(/^\/api\/portal\/cars\/([1-9]\d*)\/(statement|payouts)$/);
+  if (statementMatch) {
+    if (method !== "GET") return notFound();
+    const id = parsePathId(statementMatch[1]);
+    if (id === null) return notFound();
+    const car = await getOwnedCar(db, id, ownerId);
+    if (!car) return notFound();
+    if (statementMatch[2] === "payouts") return payoutListResponse(db, id);
+    return statementResponse(request, db, car);
+  }
   const expenseMatch = path.match(/^\/api\/portal\/cars\/([1-9]\d*)\/expenses$/);
   if (expenseMatch) {
     if (method !== "GET") return notFound();
@@ -241,6 +266,19 @@ async function reportResponse(request: Request, db: PortalD1, carId: number): Pr
   if (!month.ok) return validationError(month.fields);
   const selected = month.value ?? currentMonthEastern();
   return json(await carMoneyReport(db, carId, selected, monthBounds(selected)));
+}
+
+async function statementResponse(request: Request, db: PortalD1, car: CarRow): Promise<Response> {
+  const monthRaw = new URL(request.url).searchParams.get("month");
+  const month = parseLedgerMonth(monthRaw);
+  if (!month.ok) return validationError(month.fields);
+  const current = currentMonthEastern();
+  return json(await carStatement(db, car, month.value ?? current, current));
+}
+
+async function payoutListResponse(db: PortalD1, carId: number): Promise<Response> {
+  const rows = await listPayouts(db, carId);
+  return json({ payouts: rows.map(payoutJson) });
 }
 
 async function expenseListResponse(request: Request, db: PortalD1, carId: number): Promise<Response> {
@@ -413,6 +451,60 @@ export async function routeAdminMoney(
       return json({ expense: expenseJson(row) }, 201);
     }
     return methodNotAllowed("GET, POST");
+  }
+
+  const payoutOne = path.match(/^\/api\/portal\/admin\/cars\/([1-9]\d*)\/payouts\/([1-9]\d*)$/);
+  if (payoutOne) {
+    const carId = parsePathId(payoutOne[1]);
+    const payoutId = parsePathId(payoutOne[2]);
+    if (carId === null || payoutId === null) return notFound();
+    const car = await getCarById(db, carId);
+    if (!car) return notFound();
+    if (method !== "DELETE") return methodNotAllowed("DELETE");
+    const existing = await getPayout(db, carId, payoutId);
+    if (!existing) return notFound();
+    await deletePayout(db, carId, payoutId);
+    return json({ ok: true });
+  }
+
+  const payoutList = path.match(/^\/api\/portal\/admin\/cars\/([1-9]\d*)\/payouts$/);
+  if (payoutList) {
+    const carId = parsePathId(payoutList[1]);
+    if (carId === null) return notFound();
+    const car = await getCarById(db, carId);
+    if (!car) return notFound();
+    if (method === "GET") return payoutListResponse(db, carId);
+    if (method === "POST") {
+      const body = await readJson(request);
+      if (!body.ok) return body.response;
+      const parsed = parsePayoutCreate(body.value, currentMonthEastern());
+      if (!parsed.ok) return validationError(parsed.fields);
+      let id: number;
+      try {
+        id = await insertPayout(db, carId, parsed.value, actorId);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (/CHECK constraint failed/i.test(message)) {
+          return validationError({ body: "That payout is not valid." });
+        }
+        if (/FOREIGN KEY constraint failed/i.test(message)) return notFound();
+        throw error;
+      }
+      const row = await getPayout(db, carId, id);
+      if (!row) return json({ error: "server_error" }, 500);
+      return json({ payout: payoutJson(row) }, 201);
+    }
+    return methodNotAllowed("GET, POST");
+  }
+
+  const statementMatch = path.match(/^\/api\/portal\/admin\/cars\/([1-9]\d*)\/statement$/);
+  if (statementMatch) {
+    if (method !== "GET") return methodNotAllowed("GET");
+    const carId = parsePathId(statementMatch[1]);
+    if (carId === null) return notFound();
+    const car = await getCarById(db, carId);
+    if (!car) return notFound();
+    return statementResponse(request, db, car);
   }
 
   const reportMatch = path.match(/^\/api\/portal\/admin\/cars\/([1-9]\d*)\/report$/);
