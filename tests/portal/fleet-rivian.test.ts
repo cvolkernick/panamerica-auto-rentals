@@ -87,7 +87,7 @@ test("other fleet cards stay unchanged, including both Tesla Model 3s", () => {
   const expected: Record<string, { listed: boolean; labels: string[] }> = {
     "corolla-2022": { listed: true, labels: ["Book Direct", "Book on Turo", "Book on Ride"] },
     "corolla-2024": { listed: true, labels: ["Book Direct", "Book on Turo", "Book on Ride"] },
-    "model-3-2022": { listed: true, labels: ["Book on Turo"] },
+    "model-3-2022": { listed: true, labels: ["Book Direct", "Book on Turo", "Book on Ride"] },
     "model-3-2020": { listed: false, labels: [] },
     "rio-2016": { listed: true, labels: ["Book Direct", "Book on Mobi", "Book on Upcar"] },
     "soul-2014": { listed: true, labels: ["Book Direct", "Book on Ride"] },
@@ -125,9 +125,12 @@ test("other fleet cards stay unchanged, including both Tesla Model 3s", () => {
 
   const model3_2022 = vehicle("model-3-2022");
   assert.deepEqual(model3_2022.links, {
-    direct: { wheelbaseRentalId: "564896", enabled: false },
+    direct: { wheelbaseRentalId: "576075", enabled: true },
     turo: "https://turo.com/us/en/car-rental/united-states/cape-coral-fl/tesla/model-3/3800020",
+    ride: "https://www.ride.auto/car-rental/cape-coral_fl/2022_tesla_model-3_576075-listing",
   });
+  assert.equal(model3_2022.dailyRateUsd, undefined);
+  assert.equal(model3_2022.depositUsd, undefined);
   assert.equal(model3_2022.descriptor, "Sedan · 5 seats · electric");
   assert.equal(model3_2022.photo, "/fleet/model-3-2022.jpg?v=3");
 
