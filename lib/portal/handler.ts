@@ -33,6 +33,8 @@ import { forbidden, json, readJson, validationError } from "./http";
 import { createOwnerInvite, handleInvite } from "./invite";
 import { ledgerTotals, monthBounds } from "./ledger";
 import { authenticate, handleLogin, handleLogout, handleSetupPassword, requireCsrf } from "./login";
+import { routeAdminMoney, routeOwnerMoney } from "./money-routes";
+import { carDeleteConflict } from "./money-store";
 import {
   parseCarCreate,
   parseCarPatch,
@@ -186,6 +188,9 @@ async function route(request: Request, env: PortalEnv): Promise<Response> {
     return json({ cars: cars.map(carJson) });
   }
 
+  const ownerMoney = await routeOwnerMoney(request, db, path, method, auth.owner.id);
+  if (ownerMoney) return ownerMoney;
+
   const ownedCar = path.match(/^\/api\/portal\/cars\/([1-9]\d*)$/);
   if (ownedCar) {
     if (method !== "GET") return methodNotAllowed("GET");
@@ -295,6 +300,9 @@ async function routeAdmin(
   method: string,
   actorId: number
 ): Promise<Response> {
+  const money = await routeAdminMoney(request, db, path, method, actorId);
+  if (money) return money;
+
   const ledger = await routeLedger(request, db, path, method, actorId);
   if (ledger) return ledger;
 
@@ -420,6 +428,8 @@ async function routeAdmin(
     if (method === "DELETE") {
       const existing = await getCarById(db, id);
       if (!existing) return notFound();
+      const conflict = await carDeleteConflict(db, id);
+      if (conflict) return json({ error: "conflict", reason: conflict }, 409);
       try {
         await deleteCar(db, id);
       } catch (error) {

@@ -1,3 +1,4 @@
+import { isExpenseCategory, type ExpenseCategory } from "./expenses";
 import { isLedgerType, LEDGER_NOTE_MAX, type LedgerType } from "./ledger";
 
 export const MIN_CAR_YEAR = 1980;
@@ -40,6 +41,15 @@ export type LedgerWrite = {
 };
 
 export type LedgerPatch = Partial<LedgerWrite>;
+
+export type ExpenseWrite = {
+  entryDate: string;
+  category: ExpenseCategory;
+  amountCents: number;
+  note: string | null;
+};
+
+export type ExpensePatch = Partial<ExpenseWrite>;
 
 export type ParseOk<T> = { ok: true; value: T };
 export type ParseFail = { ok: false; fields: FieldErrors };
@@ -345,6 +355,48 @@ export function parseLedgerCreate(body: unknown): ParseResult<LedgerWrite> {
     return fail(fields);
   }
   return { ok: true, value: { entryDate, type, amountCents, note } };
+}
+
+function parseExpenseCategory(value: unknown, fields: FieldErrors): ExpenseCategory | undefined {
+  if (typeof value !== "string" || !isExpenseCategory(value)) {
+    fields.category = "Choose an expense category.";
+    return;
+  }
+  return value;
+}
+
+export function parseExpenseCreate(body: unknown): ParseResult<ExpenseWrite> {
+  if (!isRecord(body)) return fail({ body: "Expected an object." });
+  const fields: FieldErrors = {};
+  const entryDate = parseLedgerDate(body.entryDate, fields);
+  const category = parseExpenseCategory(body.category, fields);
+  const amountCents = parseAmountCents(body.amountCents, fields);
+  const note = "note" in body ? parseLedgerNote(body.note, fields) : null;
+  if (
+    Object.keys(fields).length > 0 ||
+    entryDate === undefined ||
+    category === undefined ||
+    amountCents === undefined ||
+    note === undefined
+  ) {
+    return fail(fields);
+  }
+  return { ok: true, value: { entryDate, category, amountCents, note } };
+}
+
+export function parseExpensePatch(body: unknown): ParseResult<ExpensePatch> {
+  if (!isRecord(body)) return fail({ body: "Expected an object." });
+  const fields: FieldErrors = {};
+  const value: ExpensePatch = {};
+  if ("entryDate" in body) value.entryDate = parseLedgerDate(body.entryDate, fields);
+  if ("category" in body) value.category = parseExpenseCategory(body.category, fields);
+  if ("amountCents" in body) value.amountCents = parseAmountCents(body.amountCents, fields);
+  if ("note" in body) value.note = parseLedgerNote(body.note, fields);
+  if (Object.keys(value).length === 0 && Object.keys(fields).length === 0) {
+    fields.body = "Nothing to update.";
+  }
+  if (Object.keys(fields).length > 0) return fail(fields);
+  return { ok: true, value };
 }
 
 export function parseLedgerPatch(body: unknown): ParseResult<LedgerPatch> {
