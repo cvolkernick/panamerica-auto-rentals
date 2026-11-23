@@ -352,7 +352,13 @@ export function ImportsAdmin() {
         : "Could not update this import.");
       return;
     }
-    setPayload(result.data);
+    const saved = result.data;
+    setPayload(saved);
+    setHistory((current) =>
+      current.map((item) =>
+        item.id === saved.import.id ? { ...item, status: saved.import.status } : item
+      )
+    );
   }
 
   if (gate.kind === "signed-out") {

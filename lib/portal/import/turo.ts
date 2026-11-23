@@ -94,14 +94,11 @@ function clip(value: string, max: number): string {
   return text.length <= max ? text : text.slice(0, max);
 }
 
-/** Read guest and location cells so the mapper cannot persist them later. */
-function dropGuestFields(record: Record<string, string>): void {
-  const fields = [record.Guest, record["Pickup location"], record["Return location"]];
-  for (const value of fields) {
-    if (typeof value === "string" && value.includes("\u0000")) {
-      throw new Error("bad_field");
-    }
-  }
+/** Remove guest and location cells before any other field is read. */
+export function dropGuestFields(record: Record<string, string>): void {
+  delete record.Guest;
+  delete record["Pickup location"];
+  delete record["Return location"];
 }
 
 function mapRow(record: Record<string, string>, rowNumber: number): MappedTrip {

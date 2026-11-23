@@ -302,6 +302,8 @@ describe("wheelbase import", () => {
     assert.equal(second?.grossCents, 50000);
     assert.equal(second?.platformFeesCents, 2220);
     assert.equal(second?.payoutCents, 52530);
+    assert.equal(second?.status, "On Vacation");
+    assert.equal(second?.countsAsIncome, true);
     assert.equal(second?.hasPending, true);
     assert.equal(second?.pendingPayoutCents, 23915);
     assert.equal(third?.plate, "Rio-TEST003");
@@ -346,7 +348,7 @@ describe("wheelbase import", () => {
     const committed = await call(env, "POST", `/api/portal/admin/imports/${payload.import.id}/commit`);
     assert.equal(committed.status, 200);
     const stored = await requireDb(env).prepare(
-      `SELECT gross_cents, platform_fees_cents, payout_cents, tax_cents, has_pending
+      `SELECT gross_cents, platform_fees_cents, payout_cents, tax_cents, has_pending, counts_as_income, status
        FROM trips WHERE platform = 'wheelbase' AND external_trip_id = '90000002'`
     ).bind().first<{
       gross_cents: number;
@@ -354,11 +356,20 @@ describe("wheelbase import", () => {
       payout_cents: number;
       tax_cents: number;
       has_pending: number;
+      counts_as_income: number;
+      status: string;
     }>();
     assert.equal(Number(stored?.gross_cents), 50000);
     assert.equal(Number(stored?.platform_fees_cents), 2220);
     assert.equal(Number(stored?.payout_cents), 52530);
     assert.equal(Number(stored?.has_pending), 1);
+    assert.equal(stored?.status, "On Vacation");
+    assert.equal(Number(stored?.counts_as_income), 1);
+    const vacation = await call(env, "GET", `/api/portal/admin/cars/${ids[1]}/report?month=2026-11`);
+    const vacationTotals = vacation.data?.monthTotals as { payoutCents: number; taxCents: number; incomeCents: number };
+    assert.equal(vacationTotals.payoutCents, 52530);
+    assert.equal(vacationTotals.taxCents, 4750);
+    assert.equal(vacationTotals.incomeCents, 47780);
     const report = await call(env, "GET", `/api/portal/admin/cars/${ids[0]}/report?month=2026-11`);
     const totals = report.data?.monthTotals as {
       payoutCents: number;

@@ -7,6 +7,7 @@ import { parseTuroStamp } from "../../lib/portal/import/dates";
 import {
   TURO_HEADERS,
   TURO_REQUIRED_HEADERS,
+  dropGuestFields,
   plateFromVehicle,
   turoCountsAsIncome,
   turoMapper,
@@ -93,6 +94,32 @@ describe("turo mapper", () => {
       TURO_HEADERS.map((header) => `"${header}"`).join(",")
     );
     for (const header of TURO_REQUIRED_HEADERS) assert.equal(TURO_HEADERS.includes(header), true);
+  });
+
+  test("deletes guest and location keys before the row is mapped", () => {
+    const record: Record<string, string> = {
+      Guest: "Test Guest",
+      "Pickup location": "123 Secret Street",
+      "Return location": "500 Hidden Ave",
+      "Reservation ID": "T100",
+      Vehicle: "2022 Test Model 3 (TEST001)",
+    };
+    const mapper = readFileSync("lib/portal/import/turo.ts", "utf8");
+    const mapRow = mapper.slice(mapper.indexOf("function mapRow"));
+    const droppedAt = mapRow.indexOf("dropGuestFields(record)");
+    const nextRead = mapRow.indexOf("record[");
+    assert.ok(droppedAt >= 0 && nextRead > droppedAt);
+    dropGuestFields(record);
+    assert.equal("Guest" in record, false);
+    assert.equal("Pickup location" in record, false);
+    assert.equal("Return location" in record, false);
+    assert.equal(record["Reservation ID"], "T100");
+    assert.equal(record.Vehicle, "2022 Test Model 3 (TEST001)");
+    const [trip] = parseRows(turoCsv([turoRow()]));
+    const encoded = JSON.stringify(trip);
+    assert.equal(encoded.includes("Test Guest"), false);
+    assert.equal(encoded.includes("Secret Street"), false);
+    assert.equal(encoded.includes("Hidden Ave"), false);
   });
 
   test("normalizes VIN and plate and drops the guest", () => {

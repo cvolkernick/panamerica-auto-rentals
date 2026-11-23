@@ -330,6 +330,8 @@ Turo plate extraction: from `Vehicle`, take the last parenthetical group, trim, 
 
 Turo `counts_as_income`: true when status is `Completed`, or when status is `Guest cancellation` or `Host cancellation` and `payout_cents !== 0`. Otherwise false.
 
+Wheelbase `counts_as_income`: a trip counts as income as soon as money is collected (`payout_cents !== 0`), including in-progress statuses such as `On Vacation`. `Returned`, `Completed`, and `Complete` count even when payout is zero. A cancellation counts only when payout is not zero. Chris decided this at 12:32 AM ET on November 23, 2026. Pending deposit rows stay inside that payout; they are flagged, not excluded.
+
 A new platform later is: a mapper module, a registry entry, an anonymized fixture, and tests. No change to `trips` or the report queries.
 
 ## 5. Car matching and the unmatched review screen
@@ -370,12 +372,12 @@ Owners:
 
 ## 7. Net report
 
-Income for a period is the sum of `payout_cents` for that car's trips where `counts_as_income = 1` and `start_date` is in the period. A trip that crosses a month boundary is attributed entirely to `start_date` (call this out in the UI). Do not prorate in this MVP.
+Income for a period is payout minus tax collected for that car's trips where `counts_as_income = 1` and `start_date` is in the period. Tax is pass-through and is not owner income (§§14–15). Turo leaves `tax_cents` null, so Turo income equals Total earnings. A trip that crosses a month boundary is attributed entirely to `start_date` (call this out in the UI). Do not prorate in this MVP.
 
 Expenses for a period are the sum of `amount_cents` where `entry_date` is in the period.
 
 ```
-income_cents     = SUM(trips.payout_cents)    WHERE car_id = ? AND counts_as_income = 1 AND start_date >= ? AND start_date < ?
+income_cents     = SUM(payout_cents - COALESCE(tax_cents, 0)) WHERE car_id = ? AND counts_as_income = 1 AND start_date >= ? AND start_date < ?
 expense_cents    = SUM(expenses.amount_cents) WHERE car_id = ? AND entry_date >= ? AND entry_date < ?
 net_cents        = income_cents - expense_cents
 ```
@@ -501,7 +503,8 @@ When the branch is pushed and the PR is open, comment the PR URL and the head SH
 Two files joined on Booking ID.
 - Reservations export: Booking ID, Status, Source, Rental ID, Rental Name, Vehicle Internal ID (format "<Model>-<PLATE>", e.g. Rio-<plate>; plate = text after last hyphen, pending Chris confirm), Start/End (date) + Start Time/End Time (seconds after midnight), Nights, Rental Amount, Addon Amount, Discount, Mileage Fee, Subtotal, tax columns (names vary by jurisdiction: treat any header ending in "Tax" as tax), Total, Amount Paid, Due, Mileage Out/In/Used, CC Fees, Outdoorsy Remitted Taxes, Partner Commission. Guest name/phone/email/address: never store.
 - Transactions export: Date, Deposit Date (0001-01-01 = not yet deposited -> pending), Reservation ("#<BookingID> - <guest>": parse id, drop name), Type (Full Reservation Charge, Manual Charge, Wheelbase Fee Payment, others unknown), Amount, CC Fee, Wheelbase Fee, Credit, Debit, Partner Commission. Multiple rows per booking (split charges).
-- Per booking: gross = Subtotal (excl tax); tax_collected = sum tax cols (pass-through, excluded from owner income); platform_fees = sum CC Fee + Wheelbase Fee; payout = sum Credit - sum Debit; deposited vs pending by Deposit Date. Verified on Chris's samples (real booking ids and amounts are not copied here). Anonymized fixtures reproduce split charges, a pending deposit row (`0001-01-01`), and one unknown Type row.
+- Per booking: gross = Subtotal (excl tax); tax_collected = sum tax cols (pass-through, excluded from owner income); platform_fees = sum CC Fee + Wheelbase Fee; payout = sum Credit - sum Debit; deposited vs pending by Deposit Date. Owner income is payout minus tax collected. Verified on Chris's samples (real booking ids and amounts are not copied here). Anonymized fixtures reproduce split charges, a pending deposit row (`0001-01-01`), and one unknown Type row.
+- `counts_as_income`: count the trip as soon as money is collected (`payout_cents !== 0`), including in-progress statuses such as `On Vacation` (Chris, 12:32 AM ET, November 23, 2026). `Returned`, `Completed`, and `Complete` count even when payout is zero. A cancellation counts only when payout is not zero. A pending deposit stays in the payout and is flagged.
 - Unmatched booking ids either side -> review screen. Unknown Type values: import the rest of the file, park the raw row in an admin review list, never guess or drop (see §15).
 
 ## 15. Chris answers 11/22 11:16 PM
