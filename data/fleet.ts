@@ -266,6 +266,22 @@ export const fleetVehicles: readonly FleetVehicle[] = [
     },
   },
   {
+    slug: "soul-2014",
+    year: 2014,
+    make: "Kia",
+    model: "Soul",
+    descriptor: "Hatchback · 5 seats · gas",
+    photo: "/fleet/soul-2014.jpg",
+    photoAlt: "2014 Kia Soul hatchback in silver",
+    location: "Cape Coral",
+    partner: null,
+    listed: true,
+    links: {
+      direct: { wheelbaseRentalId: "578826", enabled: true },
+      ride: "https://www.ride.auto/car-rental/cape-coral_fl/2014_kia_soul_578826-listing",
+    },
+  },
+  {
     slug: "wrangler-2025",
     year: 2025,
     make: "Jeep",

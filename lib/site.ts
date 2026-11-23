@@ -198,7 +198,7 @@ export const fleetPartners = [
     slug: "atlasgo",
     name: "AtlasGO",
     accent: "green" as const,
-    vehicles: ["Kia Rio 2016"],
+    vehicles: ["Kia Rio 2016", "Kia Soul 2014"],
     note: null,
     profileStatus: null,
     links: [],

@@ -89,6 +89,7 @@ test("other fleet cards stay unchanged, including both Tesla Model 3s", () => {
     "model-3-2022": { listed: true, labels: ["Book on Turo"] },
     "model-3-2020": { listed: false, labels: [] },
     "rio-2016": { listed: true, labels: ["Book Direct", "Book on Mobi", "Book on Upcar"] },
+    "soul-2014": { listed: true, labels: ["Book Direct", "Book on Ride"] },
     "wrangler-2025": { listed: true, labels: ["Book on Turo"] },
     "k4-2025": { listed: true, labels: ["Book on Turo"] },
     "sentra-2025": { listed: true, labels: ["Book on Turo"] },
@@ -137,4 +138,44 @@ test("other fleet cards stay unchanged, including both Tesla Model 3s", () => {
   });
   assert.equal(model3_2020.descriptor, "Sedan · 5 seats · electric");
   assert.equal(model3_2020.photo, "/fleet/model-3-2020.jpg");
+});
+
+test("2014 Kia Soul card is available with Book Direct and Ride, and shows no price", () => {
+  const soul = vehicle("soul-2014");
+  assert.equal(soul.year, 2014);
+  assert.equal(soul.make, "Kia");
+  assert.equal(soul.model, "Soul");
+  assert.equal(soul.descriptor, "Hatchback · 5 seats · gas");
+  assert.equal(soul.photo, "/fleet/soul-2014.jpg");
+  assert.equal(soul.photoAlt, "2014 Kia Soul hatchback in silver");
+  assert.equal(soul.location, "Cape Coral");
+  assert.equal(soul.partner, null);
+  assert.equal(soul.listed, true);
+  assert.equal(soul.dailyRateUsd, undefined);
+  assert.equal(soul.depositUsd, undefined);
+  assert.equal(dailyRateLabel(soul.dailyRateUsd), null);
+  assert.equal(depositLabel(soul.depositUsd), null);
+
+  const ride =
+    "https://www.ride.auto/car-rental/cape-coral_fl/2014_kia_soul_578826-listing";
+  const widgetUrl =
+    "https://widget.wheelbasepro.com/?dealer_id=5262019&store_type=auto&page=listing-details&rental_id=578826";
+  assert.deepEqual(soul.links, {
+    direct: { wheelbaseRentalId: "578826", enabled: true },
+    ride,
+  });
+  assert.equal("turo" in soul.links, false);
+  assert.equal(wheelbaseBookingUrl("578826"), widgetUrl);
+
+  const buttons = bookingButtons(soul);
+  assert.deepEqual(
+    buttons.map((button) => button.label),
+    ["Book Direct", "Book on Ride"]
+  );
+  assert.equal(buttons[0]?.kind, "direct");
+  if (buttons[0]?.kind !== "direct") return;
+  assert.equal(buttons[0].rentalId, "578826");
+  assert.equal(buttons[1]?.kind, "link");
+  if (buttons[1]?.kind !== "link") return;
+  assert.equal(buttons[1].href, ride);
 });
