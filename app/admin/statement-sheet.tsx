@@ -95,7 +95,17 @@ export function StatementSheet({
       <section className="mt-6">
         <h4 className={`font-heading text-xs tracking-[0.16em] uppercase ${muted}`}>Statement</h4>
         <dl className="mt-2 text-sm">
-          <Line label="Shortfall carried in" value={signed(s.carryInCents)} rule={rule} />
+          <Line
+            label={
+              s.openingBalanceCents < 0
+                ? "Opening balance (shortfall carried in)"
+                : s.openingBalanceCents > 0
+                  ? "Opening balance (unpaid surplus carried in)"
+                  : "Opening balance"
+            }
+            value={signed(s.openingBalanceCents)}
+            rule={rule}
+          />
           <Line label="Rental income" value={formatUsdFromCents(s.incomeCents)} rule={rule} />
           {s.expenses.map((expense) => (
             <Line
@@ -123,8 +133,9 @@ export function StatementSheet({
               indent
             />
           ))}
-          {s.carryOutCents < 0 ? (
-            <Line label="Shortfall carried to next month" value={signed(s.carryOutCents)} rule={rule} strong />
+          <Line label="Ending balance, carried to next month" value={signed(s.endingBalanceCents)} rule={rule} strong />
+          {s.endingBalanceCents < 0 ? (
+            <Line label="Payout due (shortfall still being covered)" value={formatUsdFromCents(0)} rule={rule} strong />
           ) : (
             <Line
               label={s.open ? "Payout due if the month closed today" : "Payout due"}
@@ -136,8 +147,9 @@ export function StatementSheet({
         </dl>
         {s.overpaidCents > 0 ? (
           <p className={`mt-3 text-sm ${muted}`}>
-            Payouts recorded are {formatUsdFromCents(s.overpaidCents)} more than this month now supports, after a
-            later trip update. The difference comes out of later rental income.
+            Payouts recorded are {formatUsdFromCents(s.overpaidCents)} more than the accrued balance now supports,
+            for example after a later trip update. The difference stays in the balance and comes out of later
+            rental income.
           </p>
         ) : null}
       </section>

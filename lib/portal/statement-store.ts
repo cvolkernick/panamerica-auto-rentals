@@ -149,14 +149,14 @@ async function statementInputs(db: PortalD1, carId: number) {
 function historyRow(statement: MonthStatement) {
   return {
     month: statement.month,
-    carryInCents: statement.carryInCents,
+    openingBalanceCents: statement.openingBalanceCents,
     incomeCents: statement.incomeCents,
     expenseCents: statement.expenseCents,
     managementFeeCents: statement.managementFeeCents,
     closingBalanceCents: statement.closingBalanceCents,
     paidCents: statement.paidCents,
+    endingBalanceCents: statement.endingBalanceCents,
     payoutDueCents: statement.payoutDueCents,
-    carryOutCents: statement.carryOutCents,
     overpaidCents: statement.overpaidCents,
     open: statement.open,
   };
@@ -187,7 +187,7 @@ export async function carStatement(db: PortalD1, car: CarRow, month: string, cur
     rules: {
       attribution: "A trip counts entirely in the month it starts. Expenses count in the month they are dated.",
       fee: "The management fee is figured per trip on its counted income, before expenses, and is booked as the last expense of the month.",
-      carry: "A month that ends below zero carries the shortfall into next month. A payout is due only when the balance is above zero.",
+      carry: "Each car has one running balance. Unpaid surplus and shortfalls both carry into the next month. A payout is due only when the accrued balance, after payouts already made, is above zero.",
     },
     statement,
     history: statements.map(historyRow),

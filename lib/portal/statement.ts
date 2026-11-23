@@ -7,8 +7,9 @@
  * - Each car is self-contained. Nothing is pooled across an owner's cars.
  * - The management fee is figured on rental revenue only, before expenses, and is
  *   booked as the last expense of the month.
- * - Expenses that rental income has not covered carry forward and come out of later
- *   rental income. A payout is due only when the running balance is above zero.
+ * - One running balance per car. Expenses that rental income has not covered stay in the
+ *   balance and come out of later rental income. A payout is due only when the accrued
+ *   balance, net of every payout recorded so far, is above zero.
  */
 
 /** Trip-length tiers of the one flagship plan, in basis points. */
@@ -98,20 +99,20 @@ export type StatementTrip = StatementTripInput & {
 
 export type MonthStatement = {
   month: string;
-  /** Shortfall carried in from earlier months. Zero or negative. */
-  carryInCents: number;
+  /** Running balance at the start of the month, after earlier payouts. Positive or negative. */
+  openingBalanceCents: number;
   incomeCents: number;
   expenseCents: number;
   managementFeeCents: number;
-  /** carryIn + income - expenses - fee. */
+  /** opening + income - expenses - fee, before this month's payouts. */
   closingBalanceCents: number;
   /** Payouts recorded against this month. */
   paidCents: number;
-  /** Still owed to the owner for this month. Zero or positive. */
+  /** closing - paid. Rolls into next month as its opening balance, positive or negative. */
+  endingBalanceCents: number;
+  /** max(0, ending): accrued surplus still owed to the owner through this month. */
   payoutDueCents: number;
-  /** Shortfall that rolls into next month. Zero or negative. */
-  carryOutCents: number;
-  /** Payouts recorded are more than this month's closing balance now supports. */
+  /** Payouts recorded for this month exceed the accrued surplus they could draw on. */
   overpaidCents: number;
   /** The month has not ended yet in America/New_York. */
   open: boolean;
@@ -139,17 +140,19 @@ function monthOf(date: string): string {
 
 /**
  * Builds one statement per month, oldest first, from the car's first activity month
- * through max(lastMonth, latest activity month).
+ * through max(lastMonth, latest activity month). One running balance per car:
  *
- * carryIn(m) = carryOut(m - 1); the first month starts at 0.
- * closing(m) = carryIn(m) + income(m) - expenses(m) - fee(m)
- * left(m)    = closing(m) - paid(m)
- * payoutDue(m) = max(0, left(m))
- * carryOut(m)  = min(0, left(m))
+ * balance through M = sum over months <= M of (income - expenses - fee)
+ *                     - sum of payouts recorded for months <= M
  *
- * A positive balance never rolls forward: it is owed for its own month until paid.
- * Paying more than the closing balance (for example after a re-import lowers income)
- * leaves a negative left(m), which carries forward and is recovered from later income.
+ * opening(m)   = ending(m - 1)              (0 for the first month)
+ * closing(m)   = opening(m) + income(m) - expenses(m) - fee(m)
+ * ending(m)    = closing(m) - paid(m)       (= balance through m)
+ * payoutDue(m) = max(0, ending(m))
+ *
+ * A negative balance is the carried shortfall. An unpaid surplus is not owed separately:
+ * it stays in the balance and is netted against later shortfalls before anything is paid.
+ * Payouts are never rewritten; a re-import that changes income just moves the balance.
  */
 export function buildStatements(input: {
   trips: StatementTripInput[];
@@ -168,7 +171,7 @@ export function buildStatements(input: {
   const last = [sorted[sorted.length - 1], input.lastMonth].sort()[1];
 
   const statements: MonthStatement[] = [];
-  let carry = 0;
+  let balance = 0;
   for (let month = first; month <= last; month = nextMonth(month)) {
     const trips = input.trips
       .filter((trip) => monthOf(trip.startDate) === month)
@@ -179,41 +182,40 @@ export function buildStatements(input: {
     const feeCents = trips.reduce((sum, trip) => sum + trip.feeCents, 0);
     const expenseCents = expenses.reduce((sum, expense) => sum + expense.amountCents, 0);
     const paidCents = payouts.reduce((sum, payout) => sum + payout.amountCents, 0);
-    const closing = carry + incomeCents - expenseCents - feeCents;
-    const left = closing - paidCents;
-    const statement: MonthStatement = {
+    const closing = balance + incomeCents - expenseCents - feeCents;
+    const ending = closing - paidCents;
+    statements.push({
       month,
-      carryInCents: carry,
+      openingBalanceCents: balance,
       incomeCents,
       expenseCents,
       managementFeeCents: feeCents,
       closingBalanceCents: closing,
       paidCents,
-      payoutDueCents: Math.max(0, left),
-      carryOutCents: Math.min(0, left),
-      overpaidCents: paidCents > Math.max(0, closing) ? paidCents - Math.max(0, closing) : 0,
+      endingBalanceCents: ending,
+      payoutDueCents: Math.max(0, ending),
+      overpaidCents: Math.max(0, paidCents - Math.max(0, closing)),
       open: month >= input.currentMonth,
       trips,
       expenses,
       payouts,
-    };
-    statements.push(statement);
-    carry = statement.carryOutCents;
+    });
+    balance = ending;
   }
   return statements;
 }
 
-export function emptyStatement(month: string, currentMonth: string, carryInCents = 0): MonthStatement {
+export function emptyStatement(month: string, currentMonth: string, openingBalanceCents = 0): MonthStatement {
   return {
     month,
-    carryInCents,
+    openingBalanceCents,
     incomeCents: 0,
     expenseCents: 0,
     managementFeeCents: 0,
-    closingBalanceCents: carryInCents,
+    closingBalanceCents: openingBalanceCents,
     paidCents: 0,
-    payoutDueCents: 0,
-    carryOutCents: Math.min(0, carryInCents),
+    endingBalanceCents: openingBalanceCents,
+    payoutDueCents: Math.max(0, openingBalanceCents),
     overpaidCents: 0,
     open: month >= currentMonth,
     trips: [],
@@ -233,7 +235,8 @@ export function statementForMonth(
   return emptyStatement(month, currentMonth);
 }
 
-/** Payout owed across every month so far, net of recorded payouts. */
+/** Payout owed now: the accrued balance after the latest month, if positive. */
 export function totalPayoutDueCents(statements: MonthStatement[]): number {
-  return statements.reduce((sum, statement) => sum + statement.payoutDueCents, 0);
+  const last = statements[statements.length - 1];
+  return last ? last.payoutDueCents : 0;
 }

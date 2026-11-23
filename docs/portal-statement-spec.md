@@ -49,27 +49,40 @@ Code: `buildStatements` in `lib/portal/statement.ts`. Months are America/New_Yor
 months. Trips count in their `start_date` month, expenses in their `entry_date` month, payouts in
 their `period_month`.
 
+Each car has **one running balance** (revised 11/23 per Chris's rule that "payouts should only be
+made if there is a net surplus that has accrued" and "expenses should accrue so long as they
+exceed rental proceeds"):
+
+```
+balance through M = sum over months <= M of (income - expenses - management fee)
+                    - sum of payouts recorded for months <= M
+payout due through M = max(0, balance through M)
+```
+
+A negative balance is the carried shortfall. An unpaid surplus is not owed separately for its own
+month: it stays in the balance and is netted against any later shortfall before anything is paid.
+
 The run starts at the car's first activity month (earliest trip, expense, or payout) and goes
-through the later of the current month and the requested month. For each month `m`:
+through the later of the current month and the requested month. Per month `m`:
 
 ```
-carry_in(m)  = carry_out(m - 1)            (0 for the first month)
-closing(m)   = carry_in(m) + income(m) - expenses(m) - fee(m)
-left(m)      = closing(m) - paid(m)         (paid = payouts recorded for m)
-payout_due(m) = max(0, left(m))
-carry_out(m)  = min(0, left(m))
+opening(m)    = ending(m - 1)              (0 for the first month; positive or negative)
+closing(m)    = opening(m) + income(m) - expenses(m) - fee(m)
+ending(m)     = closing(m) - paid(m)       (= balance through m; becomes next month's opening)
+payout_due(m) = max(0, ending(m))
 ```
 
-- **carry_in** is only ever zero or negative. A month that ends below zero rolls the whole
-  shortfall into the next month, which takes it out of the next rental income first. This repeats
-  for as many months as it takes.
-- A month that ends above zero owes that amount for that month. A positive balance never rolls
-  forward; it stays "payout due" on its own month until a payout is recorded against it. The
-  statement also shows the total owed across all months.
-- The current month is marked open. Its "payout due" is labeled "if the month closed today".
+- The statement's opening line is the opening balance, positive (unpaid surplus carried in) or
+  negative (shortfall carried in).
+- "Payout due now" is the latest month's `payout_due`, not a sum across months.
+- The current month is marked open. Its payout due is labeled "if the month closed today".
 - A month before the car's first activity reads as an empty zero statement.
 - Each car is computed only from its own trips, expenses, and payouts. There is no owner-level
   pooling anywhere.
+
+Netting example (test): June closes +$80 (after the fee) and is not paid. July has $120 of
+maintenance and no trips: opening +$80, ending -$40, payout due $0. August earns $80 after the
+fee: opening -$40, ending +$40, payout due $40.
 
 Worked onboarding example (unit and API tests): $800 road-ready work in October, no trips.
 October closes at -$800 and carries it. November has a 5-day trip with $500 income: fee $100
@@ -97,15 +110,13 @@ with payouts returns 409 `car_has_payouts`.
 
 Trip rows are upserted on `(platform, external_trip_id)`, so a later import can change a paid
 month's income. Payout rows are never touched by an import, and nothing recomputes or rewrites
-them. The statement is recomputed from current data every time, so the difference flows through
-the running balance:
+them. The statement is recomputed from current data every time, so any revision just moves the
+running balance:
 
-- **Income goes down** (refund, adjustment): `paid(m)` is now more than `closing(m)`. The
-  statement shows the overpaid amount, `payout_due(m)` is 0, and the negative `left(m)` carries
-  into the next month as a shortfall, so it is recovered from later rental income. Nothing is
-  clawed back by editing the payout.
-- **Income goes up**: the extra shows as payout due on the original month, on top of what was
-  already paid.
+- **Income goes down** (refund, adjustment): the balance after the payout goes negative. The
+  statement flags the overpaid amount, payout due is 0, and the shortfall carries forward and is
+  recovered from later rental income. Nothing is clawed back by editing the payout.
+- **Income goes up**: the extra raises the balance and shows up in payout due from that month on.
 
 ## 5. Monthly statement
 
@@ -114,10 +125,10 @@ API: `GET /api/portal/admin/cars/:id/statement?month=YYYY-MM` (admin) and
 the car (year, make, model, plate), the month's statement, the full month-by-month history, the
 total owed, and the fee tiers.
 
-Statement lines, in order: shortfall carried in; trips starting this month (platform, dates,
+Statement lines, in order: opening balance (positive or negative); trips starting this month (platform, dates,
 status, days, counted income, fee rate, fee; no guest names); rental income; each expense and the
 expense total; Panamerica management fee (last expense line); closing balance; payouts recorded
-(each one); payout due, or shortfall carried to next month.
+(each one); ending balance carried to next month; payout due (zero while the balance is negative).
 
 UI:
 - Admin car page (`/admin/cars/<plate>/`) and owner view (`/owner/`): the existing net report
@@ -131,7 +142,8 @@ UI:
 ## 6. Tests
 
 `tests/portal/statement.test.ts`: trip length; 6/7/21/22-day boundaries; half-up rounding per
-trip; non-income trips earn no fee; cancellation-fee income; onboarding (October expense, no
+trip; non-income trips earn no fee; cancellation-fee income; an unpaid month-1 surplus netted
+against a month-2 shortfall; a partial payout drawing down the balance; onboarding (October expense, no
 trips, covered by November and December income, payout only once positive); multi-month
 shortfall including a month with no income (fee 0); no pooling across cars; overpay carries
 forward; open month; payout validation; the API end to end on a memory D1 with all migrations

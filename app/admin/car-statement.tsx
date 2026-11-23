@@ -129,7 +129,7 @@ export function CarStatement({
         <div className="mt-4">
           <StatementSheet data={data} variant="dark" />
           <p className="mt-3 text-sm text-white/75">
-            Owed across all months, net of payouts recorded: {formatUsdFromCents(data.totalPayoutDueCents)}
+            Payout due now, from the running balance after payouts recorded: {formatUsdFromCents(data.totalPayoutDueCents)}
           </p>
         </div>
       ) : null}
@@ -195,7 +195,7 @@ export function CarStatement({
                 />
               </PortalField>
               <p className="text-xs text-white/60 sm:col-span-3">
-                No bank, account, or Zelle details. Records what was paid for this month only.
+                No bank, account, or Zelle details. A payout draws down this car&apos;s running balance.
               </p>
               <div className="sm:col-span-3">
                 <Button type="submit" className={primaryButton} disabled={saving}>
@@ -215,7 +215,7 @@ export function CarStatement({
             <caption className="sr-only">Running balance by month</caption>
             <thead className="bg-white/5 text-white/70">
               <tr>
-                {["Month", "Carried in", "Income", "Expenses", "Fee", "Closing", "Paid", "Due / carried"].map((label) => (
+                {["Month", "Opening", "Income", "Expenses", "Fee", "Closing", "Paid", "Ending", "Due"].map((label) => (
                   <th key={label} className="px-3 py-2 font-heading text-xs tracking-[0.12em] uppercase">
                     {label}
                   </th>
@@ -229,15 +229,14 @@ export function CarStatement({
                     {row.month}
                     {row.open ? " (open)" : ""}
                   </td>
-                  <td className="px-3 py-2">{signed(row.carryInCents)}</td>
+                  <td className="px-3 py-2">{signed(row.openingBalanceCents)}</td>
                   <td className="px-3 py-2">{formatUsdFromCents(row.incomeCents)}</td>
                   <td className="px-3 py-2">{signed(-row.expenseCents)}</td>
                   <td className="px-3 py-2">{signed(-row.managementFeeCents)}</td>
                   <td className="px-3 py-2">{signed(row.closingBalanceCents)}</td>
                   <td className="px-3 py-2">{formatUsdFromCents(row.paidCents)}</td>
-                  <td className="px-3 py-2">
-                    {row.carryOutCents < 0 ? `${signed(row.carryOutCents)} carried` : `${formatUsdFromCents(row.payoutDueCents)} due`}
-                  </td>
+                  <td className="px-3 py-2">{signed(row.endingBalanceCents)}</td>
+                  <td className="px-3 py-2">{formatUsdFromCents(row.payoutDueCents)}</td>
                 </tr>
               ))}
             </tbody>

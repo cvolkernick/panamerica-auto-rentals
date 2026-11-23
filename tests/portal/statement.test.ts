@@ -14,6 +14,7 @@ import {
   feeForTrip,
   feeRateBps,
   managementFeeCents,
+  totalPayoutDueCents,
   tripLengthDays,
   type MonthStatement,
   type StatementTripInput,
@@ -143,23 +144,23 @@ describe("running balance", () => {
     });
     assert.deepEqual(statements.map((statement) => statement.month), ["2026-10", "2026-11", "2026-12"]);
     const oct = byMonth(statements, "2026-10");
-    assert.equal(oct.carryInCents, 0);
+    assert.equal(oct.openingBalanceCents, 0);
     assert.equal(oct.incomeCents, 0);
     assert.equal(oct.managementFeeCents, 0);
     assert.equal(oct.closingBalanceCents, -80000);
     assert.equal(oct.payoutDueCents, 0);
-    assert.equal(oct.carryOutCents, -80000);
+    assert.equal(oct.endingBalanceCents, -80000);
     const nov = byMonth(statements, "2026-11");
-    assert.equal(nov.carryInCents, -80000);
+    assert.equal(nov.openingBalanceCents, -80000);
     assert.equal(nov.managementFeeCents, 10000); // 5 days, 20% of 500.00, on revenue only
     assert.equal(nov.closingBalanceCents, -40000);
     assert.equal(nov.payoutDueCents, 0);
     const dec = byMonth(statements, "2026-12");
-    assert.equal(dec.carryInCents, -40000);
+    assert.equal(dec.openingBalanceCents, -40000);
     assert.equal(dec.managementFeeCents, 15000); // 10 days, 15%
     assert.equal(dec.closingBalanceCents, 45000);
     assert.equal(dec.payoutDueCents, 45000);
-    assert.equal(dec.carryOutCents, 0);
+    assert.equal(dec.endingBalanceCents, 45000);
   });
 
   test("a multi-month shortfall keeps accruing until income covers it", () => {
@@ -177,7 +178,7 @@ describe("running balance", () => {
       lastMonth: "2026-04",
       currentMonth: "2026-05",
     });
-    const values = statements.map((s) => [s.month, s.carryInCents, s.closingBalanceCents, s.payoutDueCents]);
+    const values = statements.map((s) => [s.month, s.openingBalanceCents, s.closingBalanceCents, s.payoutDueCents]);
     assert.deepEqual(values, [
       ["2026-01", 0, -30000, 0],
       ["2026-02", -30000, -42000, 0], // +100 income -20 fee -200 expense
@@ -202,8 +203,57 @@ describe("running balance", () => {
       lastMonth: "2026-11",
       currentMonth: "2026-12",
     });
-    assert.equal(byMonth(carA, "2026-11").carryOutCents, -50000);
+    assert.equal(byMonth(carA, "2026-11").endingBalanceCents, -50000);
     assert.equal(byMonth(carB, "2026-11").payoutDueCents, 80000);
+  });
+
+  test("an unpaid surplus in month 1 is netted against a month-2 shortfall before any payout", () => {
+    const statements = buildStatements({
+      trips: [
+        trip({ id: 1, startDate: "2026-06-01", endDate: "2026-06-03", incomeCents: 10000 }),
+        trip({ id: 2, startDate: "2026-08-01", endDate: "2026-08-03", incomeCents: 10000 }),
+      ],
+      expenses: [{ id: 1, entryDate: "2026-07-09", category: "maintenance", amountCents: 12000, note: "Brakes" }],
+      payouts: [],
+      lastMonth: "2026-08",
+      currentMonth: "2026-09",
+    });
+    const june = byMonth(statements, "2026-06");
+    assert.equal(june.closingBalanceCents, 8000); // 100.00 - 20.00 fee
+    assert.equal(june.payoutDueCents, 8000);
+    assert.equal(june.endingBalanceCents, 8000);
+    const july = byMonth(statements, "2026-07");
+    assert.equal(july.openingBalanceCents, 8000); // unpaid surplus carries in, positive
+    assert.equal(july.managementFeeCents, 0);
+    assert.equal(july.closingBalanceCents, -4000);
+    assert.equal(july.endingBalanceCents, -4000);
+    assert.equal(july.payoutDueCents, 0); // June's 80.00 is not owed separately
+    assert.equal(totalPayoutDueCents(statements.slice(0, 2)), 0);
+    const aug = byMonth(statements, "2026-08");
+    assert.equal(aug.openingBalanceCents, -4000);
+    assert.equal(aug.closingBalanceCents, 4000);
+    assert.equal(aug.payoutDueCents, 4000);
+    assert.equal(totalPayoutDueCents(statements), 4000);
+  });
+
+  test("a payout draws down the running balance; later months start from what is left", () => {
+    const statements = buildStatements({
+      trips: [
+        trip({ id: 1, startDate: "2026-06-01", endDate: "2026-06-03", incomeCents: 10000 }),
+        trip({ id: 2, startDate: "2026-07-01", endDate: "2026-07-03", incomeCents: 10000 }),
+      ],
+      expenses: [],
+      payouts: [{ id: 1, periodMonth: "2026-06", paidDate: "2026-07-02", amountCents: 5000, note: null }],
+      lastMonth: "2026-07",
+      currentMonth: "2026-08",
+    });
+    const june = byMonth(statements, "2026-06");
+    assert.equal(june.endingBalanceCents, 3000);
+    assert.equal(june.payoutDueCents, 3000);
+    const july = byMonth(statements, "2026-07");
+    assert.equal(july.openingBalanceCents, 3000);
+    assert.equal(july.payoutDueCents, 11000);
+    assert.equal(totalPayoutDueCents(statements), 11000);
   });
 
   test("payouts reduce what is due; overpaying carries forward as a shortfall", () => {
@@ -225,9 +275,9 @@ describe("running balance", () => {
     assert.equal(june.paidCents, 9000);
     assert.equal(june.overpaidCents, 1000);
     assert.equal(june.payoutDueCents, 0);
-    assert.equal(june.carryOutCents, -1000);
+    assert.equal(june.endingBalanceCents, -1000);
     const july = byMonth(statements, "2026-07");
-    assert.equal(july.carryInCents, -1000);
+    assert.equal(july.openingBalanceCents, -1000);
     assert.equal(july.closingBalanceCents, 7000);
     assert.equal(july.payoutDueCents, 7000);
   });
@@ -336,7 +386,7 @@ async function importStub(env: PortalEnv, rows: string[]) {
 
 type StatementJson = {
   statement: MonthStatement;
-  history: { month: string; closingBalanceCents: number; payoutDueCents: number; carryOutCents: number }[];
+  history: { month: string; closingBalanceCents: number; payoutDueCents: number; endingBalanceCents: number }[];
   totalPayoutDueCents: number;
   car: Record<string, unknown>;
 };
@@ -370,7 +420,7 @@ describe("statement API", () => {
     assert.equal(oct.statement.payoutDueCents, 0);
     assert.equal(oct.statement.managementFeeCents, 0);
     const nov = await statementOf(env, carId, "2025-11");
-    assert.equal(nov.statement.carryInCents, -80000);
+    assert.equal(nov.statement.openingBalanceCents, -80000);
     assert.equal(nov.statement.managementFeeCents, 10000);
     assert.equal(nov.statement.closingBalanceCents, -40000);
     assert.equal(nov.statement.payoutDueCents, 0);
@@ -478,10 +528,10 @@ describe("statement API", () => {
     assert.equal(sep.statement.paidCents, 8000);
     assert.equal(sep.statement.overpaidCents, 3200);
     assert.equal(sep.statement.payoutDueCents, 0);
-    assert.equal(sep.statement.carryOutCents, -3200);
+    assert.equal(sep.statement.endingBalanceCents, -3200);
     assert.equal(sep.statement.payouts[0]?.amountCents, 8000);
     const oct = await statementOf(env, carId, "2025-10");
-    assert.equal(oct.statement.carryInCents, -3200);
+    assert.equal(oct.statement.openingBalanceCents, -3200);
     assert.equal(oct.statement.closingBalanceCents, 4800);
     assert.equal(oct.statement.payoutDueCents, 4800);
     // Platform later reports more: the extra is owed on the original month.
@@ -489,6 +539,11 @@ describe("statement API", () => {
     const sepUp = await statementOf(env, carId, "2025-09");
     assert.equal(sepUp.statement.closingBalanceCents, 9600);
     assert.equal(sepUp.statement.payoutDueCents, 1600);
+    assert.equal(sepUp.statement.endingBalanceCents, 1600);
+    const octUp = await statementOf(env, carId, "2025-10");
+    assert.equal(octUp.statement.openingBalanceCents, 1600);
+    assert.equal(octUp.statement.payoutDueCents, 9600);
+    assert.equal(octUp.totalPayoutDueCents, 9600); // latest balance, not Sep + Oct dues
     assert.equal(sepUp.statement.payouts[0]?.amountCents, 8000);
     const payouts = await call(env, "GET", `/api/portal/admin/cars/${carId}/payouts`);
     assert.deepEqual((payouts.data?.payouts as { amountCents: number }[]).map((row) => row.amountCents), [8000]);
