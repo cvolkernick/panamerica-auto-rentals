@@ -784,7 +784,7 @@ export async function carMoneyReport(db: PortalD1, carId: number, month: string,
 export async function carDeleteConflict(
   db: PortalD1,
   carId: number
-): Promise<"car_has_trips" | "car_has_expenses" | null> {
+): Promise<"car_has_trips" | "car_has_expenses" | "car_has_payouts" | null> {
   const trips = await db
     .prepare(`SELECT 1 AS ok FROM trips WHERE car_id = ? LIMIT 1`)
     .bind(carId)
@@ -795,5 +795,10 @@ export async function carDeleteConflict(
     .bind(carId)
     .first<{ ok: number }>();
   if (expenses) return "car_has_expenses";
+  const payouts = await db
+    .prepare(`SELECT 1 AS ok FROM payouts WHERE car_id = ? LIMIT 1`)
+    .bind(carId)
+    .first<{ ok: number }>();
+  if (payouts) return "car_has_payouts";
   return null;
 }

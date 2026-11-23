@@ -22,6 +22,8 @@ import {
 import type { ExpenseJson, MoneyReportJson, MoneyTotalsJson, PortalErrorJson } from "@/lib/portal/types";
 import { parseExpenseCreate } from "@/lib/portal/validate";
 
+import { CarStatement } from "./car-statement";
+
 const primaryButton =
   "h-11 bg-red px-6 font-heading tracking-[0.18em] text-white uppercase hover:bg-red/90";
 const secondaryButton =
@@ -69,7 +71,7 @@ function Totals({ totals }: { totals: MoneyTotalsJson }) {
         <dd className="mt-1 text-2xl font-bold text-white">{formatUsdFromCents(totals.expenseCents)}</dd>
       </div>
       <div>
-        <dt className="font-heading text-xs tracking-[0.16em] text-white/55 uppercase">Net</dt>
+        <dt className="font-heading text-xs tracking-[0.16em] text-white/55 uppercase">Net before fee</dt>
         <dd className="mt-1 text-2xl font-bold text-white">{formatUsdFromCents(totals.netCents)}</dd>
       </div>
     </dl>
@@ -186,7 +188,8 @@ export function CarMoney({ carId, mode }: { carId: number; mode: "owner" | "admi
       <h2 className="text-2xl font-bold text-white">Net report</h2>
       <p className="mt-2 max-w-2xl text-sm leading-relaxed text-white/70">
         Income is payout minus sales tax. Tax is collected for the state and is not profit. Turo
-        payouts are already net of sales tax. {report?.attribution}
+        payouts are already net of sales tax. {report?.attribution} The monthly statement adds the
+        Panamerica management fee and carries any shortfall into the next month.
       </p>
       <div className="mt-8 max-w-xs">
         <PortalField id={`money-month-${carId}`} label="Month">
@@ -233,9 +236,9 @@ export function CarMoney({ carId, mode }: { carId: number; mode: "owner" | "admi
           </dl>
           <div className="mt-6 grid gap-3 text-sm leading-relaxed text-white/80 sm:grid-cols-2">
             <p>
-              To date through {monthLabel}: {formatUsdFromCents(report.toDate.netCents)} net
+              To date through {monthLabel}: {formatUsdFromCents(report.toDate.netCents)} net before fee
             </p>
-            <p>All time: {formatUsdFromCents(report.allTime.netCents)} net</p>
+            <p>All time: {formatUsdFromCents(report.allTime.netCents)} net before fee</p>
           </div>
           {report.platforms.length > 0 ? (
             <ul className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-sm text-white/80">
@@ -249,7 +252,12 @@ export function CarMoney({ carId, mode }: { carId: number; mode: "owner" | "admi
         </div>
       ) : null}
 
-      <div className="mt-8 min-w-0 overflow-hidden rounded-xl ring-1 ring-white/10">
+      {monthReady ? (
+        <CarStatement carId={carId} mode={mode} month={month} today={today} reloadToken={reloadToken} />
+      ) : null}
+
+      <h3 className="mt-10 text-xl font-bold text-white">Trips</h3>
+      <div className="mt-4 min-w-0 overflow-hidden rounded-xl ring-1 ring-white/10">
         <table className="w-full min-w-0 text-left text-sm text-white">
           <caption className="sr-only">Trips starting in {monthLabel}</caption>
           <thead className="bg-white/5 text-white/70">
@@ -373,6 +381,12 @@ export function CarMoney({ carId, mode }: { carId: number; mode: "owner" | "admi
               </select>
             </PortalField>
           </div>
+          {form.category === "commission" ? (
+            <p className="text-sm text-white/70">
+              The Panamerica management fee is now added to each statement automatically. Log Commission only for a
+              charge that is not the management fee.
+            </p>
+          ) : null}
           <PortalField id={`expense-amount-${carId}`} label="Amount" error={errors.amount}>
             <Input
               id={`expense-amount-${carId}`}

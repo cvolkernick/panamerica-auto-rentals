@@ -146,3 +146,17 @@
     letter-spacing: 0.12em;
   }
 }
+
+/* Printable owner statement: only the statement sheet prints. */
+@media print {
+  body:has([data-print-statement]) {
+    background: #fff !important;
+  }
+  body:has([data-print-statement]) > :not(main) {
+    display: none !important;
+  }
+  [data-statement-sheet] {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

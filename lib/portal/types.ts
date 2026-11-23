@@ -122,3 +122,13 @@ export type PortalErrorJson = {
   email?: string;
   fields?: Record<string, string>;
 };
+
+export type CarStatementJson = Awaited<
+  ReturnType<typeof import("./statement-store").carStatement>
+>;
+
+export type StatementJson = CarStatementJson["statement"];
+
+export type StatementHistoryJson = CarStatementJson["history"][number];
+
+export type PayoutJson = ReturnType<typeof import("./statement-store").payoutJson>;

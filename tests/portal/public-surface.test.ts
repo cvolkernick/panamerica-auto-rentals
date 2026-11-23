@@ -87,6 +87,8 @@ test("portal pages ask robots not to index", () => {
     "app/admin/cars/page.tsx",
     "app/admin/imports/page.tsx",
     "app/owner/invite/page.tsx",
+    "app/admin/statement/page.tsx",
+    "app/owner/statement/page.tsx",
   ]) {
     assert.match(source(path), /noindex/);
   }

@@ -413,3 +413,68 @@ export function parseLedgerPatch(body: unknown): ParseResult<LedgerPatch> {
   if (Object.keys(fields).length > 0) return fail(fields);
   return { ok: true, value };
 }
+
+export const PAYOUT_NOTE_MAX = 80;
+
+export type PayoutWrite = {
+  periodMonth: string;
+  paidDate: string;
+  amountCents: number;
+  note: string | null;
+};
+
+/**
+ * Short payout note only. Rejects long digit runs (account or routing numbers),
+ * email addresses, and phone-like text so payment details never land here.
+ */
+function parsePayoutNote(value: unknown, fields: FieldErrors): string | null | undefined {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== "string") {
+    fields.note = "Enter text.";
+    return;
+  }
+  const text = value.trim().replace(/\s+/g, " ");
+  if (!text) return null;
+  if (/[\u0000-\u001F]/.test(text) || text.length > PAYOUT_NOTE_MAX) {
+    fields.note = `Use ${PAYOUT_NOTE_MAX} characters or fewer.`;
+    return;
+  }
+  if (/@/.test(text) || /\d[\d\s-]{5,}\d/.test(text)) {
+    fields.note = "Leave out account numbers, emails, and phone numbers.";
+    return;
+  }
+  return text;
+}
+
+export function parsePayoutCreate(
+  body: unknown,
+  currentMonth: string
+): ParseResult<PayoutWrite> {
+  if (!isRecord(body)) return fail({ body: "Expected an object." });
+  const fields: FieldErrors = {};
+  let periodMonth: string | undefined;
+  if (typeof body.periodMonth === "string" && LEDGER_MONTH.test(body.periodMonth.trim())) {
+    periodMonth = body.periodMonth.trim();
+    if (periodMonth > currentMonth) {
+      fields.periodMonth = "Pick this month or an earlier one.";
+      periodMonth = undefined;
+    }
+  } else {
+    fields.periodMonth = "Use a month as YYYY-MM.";
+  }
+  const dateFields: FieldErrors = {};
+  const paidDate = parseLedgerDate(body.paidDate, dateFields);
+  if (dateFields.entryDate) fields.paidDate = dateFields.entryDate;
+  const amountCents = parseAmountCents(body.amountCents, fields);
+  const note = parsePayoutNote(body.note, fields);
+  if (
+    Object.keys(fields).length > 0 ||
+    periodMonth === undefined ||
+    paidDate === undefined ||
+    amountCents === undefined ||
+    note === undefined
+  ) {
+    return fail(fields);
+  }
+  return { ok: true, value: { periodMonth, paidDate, amountCents, note } };
+}

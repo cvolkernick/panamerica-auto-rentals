@@ -372,6 +372,8 @@ Owners:
 
 ## 7. Net report
 
+> Follow-up (11/23): the automatic management fee, per-car running balance with carried shortfalls, payout records, and the monthly statement are specified in `docs/portal-statement-spec.md`.
+
 Income for a period is payout minus tax collected for that car's trips where `counts_as_income = 1` and `start_date` is in the period. Tax is pass-through and is not owner income (§§14–15). Turo leaves `tax_cents` null, so Turo income equals Total earnings. A trip that crosses a month boundary is attributed entirely to `start_date` (call this out in the UI). Do not prorate in this MVP.
 
 Expenses for a period are the sum of `amount_cents` where `entry_date` is in the period.
