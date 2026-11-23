@@ -49,6 +49,11 @@ export type FleetVehicle = {
    */
   listed: boolean;
   /**
+   * true = omit this car from /fleet. Data and photo stay in the catalog.
+   * Unlisted cars without this flag still render as "Currently unavailable".
+   */
+  hiddenFromFleet?: boolean;
+  /**
    * Public daily rate in whole US dollars. The card shows it as "$89/day".
    * Omit it and the card shows no price.
    */
@@ -156,7 +161,8 @@ export function depositLabel(depositUsd: number | undefined): string | null {
  * plus a row here.
  *
  * To take a car off the site temporarily: set `listed: false` (card stays,
- * shows "Currently unavailable", no buttons). To add a platform: add e.g.
+ * shows "Currently unavailable", no buttons). To keep the data but hide the
+ * card on /fleet: set `hiddenFromFleet: true`. To add a platform: add e.g.
  * `mobi: "https://..."` inside `links`. Book Direct: add
  * `direct: { wheelbaseRentalId: "564886", enabled: true }` inside `links`
  * (`enabled: false` hides the button but keeps the id).
@@ -241,6 +247,7 @@ export const fleetVehicles: readonly FleetVehicle[] = [
     location: "Cape Coral",
     partner: null,
     listed: false,
+    hiddenFromFleet: true,
     links: {
       turo: "https://turo.com/us/en/car-rental/united-states/cape-coral-fl/tesla/model-3/3796859",
     },
@@ -426,5 +433,12 @@ export const fleetVehicles: readonly FleetVehicle[] = [
     },
   },
 ];
+
+/** Cars rendered on /fleet. Hidden cars stay in `fleetVehicles` but do not appear. */
+export function fleetPageVehicles(
+  vehicles: readonly FleetVehicle[] = fleetVehicles
+): readonly FleetVehicle[] {
+  return vehicles.filter((car) => !car.hiddenFromFleet);
+}
 
 export const safewheelsSiteUrl = "https://safewheelsrentalsswfl.com/";

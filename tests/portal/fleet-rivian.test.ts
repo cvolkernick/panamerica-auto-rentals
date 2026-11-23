@@ -6,6 +6,7 @@ import {
   bookingButtons,
   dailyRateLabel,
   depositLabel,
+  fleetPageVehicles,
   fleetVehicles,
   wheelbaseBookingUrl,
   type FleetVehicle,
@@ -132,12 +133,37 @@ test("other fleet cards stay unchanged, including both Tesla Model 3s", () => {
 
   const model3_2020 = vehicle("model-3-2020");
   assert.equal(model3_2020.listed, false);
+  assert.equal(model3_2020.hiddenFromFleet, true);
   assert.deepEqual(bookingButtons(model3_2020), []);
   assert.deepEqual(model3_2020.links, {
     turo: "https://turo.com/us/en/car-rental/united-states/cape-coral-fl/tesla/model-3/3796859",
   });
   assert.equal(model3_2020.descriptor, "Sedan · 5 seats · electric");
   assert.equal(model3_2020.photo, "/fleet/model-3-2020.jpg");
+});
+
+test("2020 Model 3 is hidden on /fleet and the 2022 Model 3 stays visible", () => {
+  const hidden = vehicle("model-3-2020");
+  const visible = vehicle("model-3-2022");
+  assert.equal(hidden.year, 2020);
+  assert.equal(visible.year, 2022);
+  assert.equal(hidden.hiddenFromFleet, true);
+  assert.equal(visible.hiddenFromFleet, undefined);
+  assert.equal(visible.listed, true);
+
+  const pageCars = fleetPageVehicles();
+  assert.equal(pageCars.some((car) => car.slug === "model-3-2020"), false);
+  assert.equal(pageCars.some((car) => car.slug === "model-3-2022"), true);
+  assert.ok(fleetVehicles.some((car) => car.slug === "model-3-2020"));
+
+  const page = source("app/fleet/page.tsx");
+  assert.match(page, /fleetPageVehicles\(\)\.map/);
+  assert.equal(page.includes("fleetVehicles.map"), false);
+  // Other unlisted cars still use listed: false only; this flag is opt-in.
+  const othersHidden = fleetVehicles.filter(
+    (car) => car.slug !== "model-3-2020" && car.hiddenFromFleet
+  );
+  assert.deepEqual(othersHidden.map((car) => car.slug), []);
 });
 
 test("2014 Kia Soul card is available with Book Direct and Ride, and shows no price", () => {

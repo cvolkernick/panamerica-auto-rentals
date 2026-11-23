@@ -9,7 +9,7 @@ import { BookDirectButton } from "@/components/book-direct-button";
 import { Button } from "@/components/ui/button";
 import {
   bookingButtons,
-  fleetVehicles,
+  fleetPageVehicles,
   vehicleEyebrow,
   vehicleName,
 } from "@/data/fleet";
@@ -63,7 +63,7 @@ export default function FleetPage() {
       </p>
 
       <ul className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {fleetVehicles.map((vehicle) => {
+        {fleetPageVehicles().map((vehicle) => {
           const name = vehicleName(vehicle);
           // Buttons come only from data/fleet.ts (listed + links).
           const buttons = bookingButtons(vehicle);
