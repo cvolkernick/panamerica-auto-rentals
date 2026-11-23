@@ -230,10 +230,10 @@ export const fleetVehicles: readonly FleetVehicle[] = [
     partner: null,
     listed: true,
     links: {
-      direct: { wheelbaseRentalId: "564896", enabled: false },
+      direct: { wheelbaseRentalId: "576075", enabled: true },
       turo: "https://turo.com/us/en/car-rental/united-states/cape-coral-fl/tesla/model-3/3800020",
-      // 2026-10-24 off: Ride listing 404 until insurance sorted (Helm)
-      // ride: "https://www.ride.auto/car-rental/cape-coral_fl/2022_tesla_model-3_564896-listing",
+      // 2026-11-22 republished request-only (instant book off), Chris OK
+      ride: "https://www.ride.auto/car-rental/cape-coral_fl/2022_tesla_model-3_576075-listing",
     },
   },
   {
