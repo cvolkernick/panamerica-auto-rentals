@@ -1,0 +1,8 @@
+Date,Deposit Date,Reservation,Type,Charge Type,Amount,CC Fee,Outdoorsy Remitted Taxes,Wheelbase Fee,Renter Fee,Renter Services Fee,International Transaction Fee,Credit,Debit,Partner Commission
+2026-11-04,2026-11-06,#90000001 - Test Guest,Full Reservation Charge,mastercard,$436.00,$12.00,$0.00,$0.00,$0.00,$0.00,$0.00,$424.00,$0.00,$0.00
+2026-11-05,2026-11-06,#90000001 - Test Guest,Wheelbase Fee Payment,Fee,$5.00,$0.00,$0.00,$5.00,$0.00,$0.00,$0.00,$0.00,$5.00,$0.00
+2026-11-13,2026-11-16,#90000002 - Test Guest,Full Reservation Charge,mastercard,$300.00,$8.85,$0.00,$0.00,$0.00,$0.00,$0.00,$291.15,$0.00,$0.00
+2026-11-13,2026-11-16,#90000002 - Test Guest,Wheelbase Fee Payment,Fee,$5.00,$0.00,$0.00,$5.00,$0.00,$0.00,$0.00,$0.00,$5.00,$0.00
+2026-11-21,0001-01-01,#90000002 - Test Guest,Manual Charge,mastercard,$247.50,$7.35,$0.00,$1.00,$0.00,$0.00,$0.00,$239.15,$0.00,$0.00
+2026-11-09,2026-11-10,#90000003 - Test Guest,Full Reservation Charge,mastercard,$218.00,$6.00,$0.00,$0.00,$0.00,$0.00,$0.00,$212.00,$0.00,$0.00
+2026-11-10,2026-11-10,#90000003 - Test Guest,Legacy Adjustment,Adjustment,$10.00,$0.00,$0.00,$0.00,$0.00,$0.00,$0.00,$0.00,$10.00,$0.00
