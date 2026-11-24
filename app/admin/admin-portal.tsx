@@ -598,6 +598,11 @@ export function AdminPortal() {
           </ul>
         )}
       </section>
+      <p className="mt-16 text-xs text-white/40">
+        <Link href="/admin/connector/" className="hover:text-white/70 hover:underline">
+          Team connector (MCP): what it can and can&apos;t do
+        </Link>
+      </p>
     </PortalShell>
   );
 }
