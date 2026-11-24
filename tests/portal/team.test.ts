@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
-import { describe, test } from "node:test";
+import { beforeEach, describe, test } from "node:test";
 
 import type { PortalEnv } from "../../lib/portal/env";
 import { handlePortal } from "../../lib/portal/handler";
-import { noteLooksLikePii, parseAgentName } from "../../lib/portal/team";
+import type { D1Prepared, PortalD1 } from "../../lib/portal/d1";
+import { noteLooksLikePii, parseAgentName, resetTeamRateLimit, TEAM_RATE_LIMIT } from "../../lib/portal/team";
+import { MAX_ENTRY_CENTS } from "../../lib/portal/team-store";
 import { call, devEnv, PANAMERICA, requireDb } from "./support";
 
 const TOKEN = "t".repeat(24) + "-team-test-token-0123456789";
@@ -52,6 +54,8 @@ async function seedCar(env: PortalEnv, overrides: Record<string, unknown> = {}):
   assert.equal(created.status, 201, created.text);
   return (created.data?.car as { id: number }).id;
 }
+
+beforeEach(() => resetTeamRateLimit());
 
 const expense = {
   entryDate: "2026-11-20",
@@ -110,9 +114,13 @@ describe("team connector cars", () => {
     const cars = list.data?.cars as Record<string, unknown>[];
     assert.equal(cars.length, 1);
     assert.equal(cars[0].ownerEmail, undefined);
+    assert.equal(cars[0].ownerName, undefined);
+    assert.ok(!list.text.includes("Panamerica Auto Rentals"));
     assert.ok(!list.text.includes("@"));
     const one = await team(env, "GET", `/cars/${carId}`);
     assert.equal((one.data?.car as { model: string }).model, "Corolla");
+    assert.equal((one.data?.car as { ownerName?: string }).ownerName, undefined);
+    assert.ok(!one.text.includes("Panamerica Auto Rentals"));
     assert.equal((await team(env, "GET", "/cars/999")).status, 404);
   });
 
@@ -133,6 +141,13 @@ describe("team connector cars", () => {
     assert.equal(entries[0].agentName, AGENT);
     assert.equal((entries[0].before as { color: string }).color, "Silver");
     assert.equal((entries[0].after as { color: string }).color, "Blue");
+    assert.ok(!log.text.includes("Panamerica Auto Rentals"), "owner name must not be in the write log");
+    assert.ok(!log.text.includes("ownerName") && !log.text.includes("ownerEmail"));
+    const raw = await requireDb(env)
+      .prepare(`SELECT before_json || after_json AS blob FROM team_write_log`)
+      .bind()
+      .all<{ blob: string }>();
+    assert.ok(raw.results.every((r) => !r.blob.includes("Panamerica Auto Rentals") && !r.blob.includes("@")));
   });
 });
 
@@ -270,5 +285,156 @@ describe("team connector income and money rules", () => {
       (log.data?.entries as { action: string }[]).map((e) => e.action),
       ["income.delete", "income.update", "income.create"]
     );
+  });
+});
+
+describe("team connector gate fixes", () => {
+  test("commission rows are locked: no edit, no recategorize, no delete", async () => {
+    const env = teamEnv();
+    const carId = await seedCar(env);
+    const adminMade = await call(env, "POST", `/api/portal/admin/cars/${carId}/expenses`, {
+      ...expense,
+      category: "commission",
+      amountCents: 18600,
+    });
+    assert.equal(adminMade.status, 201, adminMade.text);
+    const id = (adminMade.data?.expense as { id: number }).id;
+    const amount = await team(env, "PATCH", `/cars/${carId}/expenses/${id}`, { amountCents: 1 });
+    assert.equal(amount.status, 403);
+    assert.equal(amount.data?.reason, "commission_row");
+    assert.equal((await team(env, "PATCH", `/cars/${carId}/expenses/${id}`, { category: "other" })).status, 403);
+    assert.equal((await team(env, "PATCH", `/cars/${carId}/expenses/${id}`, { note: "x" })).status, 403);
+    assert.equal((await team(env, "DELETE", `/cars/${carId}/expenses/${id}`)).status, 403);
+    const still = await call(env, "GET", `/api/portal/admin/cars/${carId}/expenses`);
+    const row = (still.data?.expenses as { amountCents: number; category: string }[])[0];
+    assert.equal(row.amountCents, 18600);
+    assert.equal(row.category, "commission");
+
+    // And no switching an ordinary row into commission.
+    const mine = await team(env, "POST", `/cars/${carId}/expenses`, expense);
+    const mineId = (mine.data?.expense as { id: number }).id;
+    assert.equal((await team(env, "PATCH", `/cars/${carId}/expenses/${mineId}`, { category: "commission" })).status, 400);
+    const log = await team(env, "GET", `/write-log?carId=${carId}`);
+    assert.deepEqual((log.data?.entries as { action: string }[]).map((e) => e.action), ["expense.create"]);
+  });
+
+  test("per-entry cap on expenses and income", async () => {
+    const env = teamEnv();
+    const carId = await seedCar(env);
+    assert.equal(MAX_ENTRY_CENTS, 5_000_000);
+    const atCap = await team(env, "POST", `/cars/${carId}/expenses`, { ...expense, amountCents: MAX_ENTRY_CENTS });
+    assert.equal(atCap.status, 201, atCap.text);
+    const huge = await team(env, "POST", `/cars/${carId}/expenses`, { ...expense, amountCents: 9_000_000_000_000_000 });
+    assert.equal(huge.status, 400);
+    assert.equal((await team(env, "POST", `/cars/${carId}/expenses`, { ...expense, amountCents: MAX_ENTRY_CENTS + 1 })).status, 400);
+    const id = (atCap.data?.expense as { id: number }).id;
+    assert.equal((await team(env, "PATCH", `/cars/${carId}/expenses/${id}`, { amountCents: MAX_ENTRY_CENTS + 1 })).status, 400);
+    const income = { startDate: "2026-11-01", endDate: "2026-11-03" };
+    for (const field of ["payoutCents", "grossCents", "platformFeesCents", "taxCents"]) {
+      const body = { ...income, payoutCents: 1000, [field]: MAX_ENTRY_CENTS + 1 };
+      const res = await team(env, "POST", `/cars/${carId}/income`, body);
+      assert.equal(res.status, 400, field);
+    }
+    assert.equal((await team(env, "POST", `/cars/${carId}/income`, { ...income, payoutCents: MAX_ENTRY_CENTS })).status, 201);
+  });
+
+  test("a write and its log row are one batch: if the log insert fails, the write rolls back", async () => {
+    const env = teamEnv();
+    const carId = await seedCar(env);
+    const real = requireDb(env);
+    // Same database, but the log insert gets an agent name the CHECK constraint rejects.
+    const failingLog: PortalD1 = {
+      batch: real.batch?.bind(real),
+      prepare(query: string): D1Prepared {
+        const statement = real.prepare(query);
+        if (!query.includes("INSERT INTO team_write_log")) return statement;
+        return {
+          ...statement,
+          bind(...values: unknown[]) {
+            statement.bind("x".repeat(200), ...values.slice(1));
+            return this;
+          },
+          run: () => statement.run(),
+        } as D1Prepared;
+      },
+    };
+    const broken = { ...env, DB: failingLog };
+    for (const [method, path, body] of [
+      ["POST", `/cars/${carId}/expenses`, expense],
+      ["POST", `/cars/${carId}/income`, { startDate: "2026-11-01", endDate: "2026-11-02", payoutCents: 500 }],
+      ["PATCH", `/cars/${carId}`, { color: "Red" }],
+    ] as const) {
+      const res = await team(broken, method, path, body);
+      assert.ok(res.status >= 400, `${method} ${path} should fail, got ${res.status}`);
+    }
+    const counts = await real
+      .prepare(
+        `SELECT (SELECT COUNT(*) FROM expenses) AS e, (SELECT COUNT(*) FROM trips) AS t,
+                (SELECT color FROM cars WHERE id = ?) AS color, (SELECT COUNT(*) FROM team_write_log) AS l`
+      )
+      .bind(carId)
+      .first<{ e: number; t: number; color: string; l: number }>();
+    assert.deepEqual({ ...counts }, { e: 0, t: 0, color: "Silver", l: 0 });
+
+    // Edits and deletes roll back too.
+    const made = await team(env, "POST", `/cars/${carId}/expenses`, expense);
+    const id = (made.data?.expense as { id: number }).id;
+    assert.ok((await team(broken, "PATCH", `/cars/${carId}/expenses/${id}`, { amountCents: 1 })).status >= 400);
+    assert.ok((await team(broken, "DELETE", `/cars/${carId}/expenses/${id}`)).status >= 400);
+    const row = await call(env, "GET", `/api/portal/admin/cars/${carId}/expenses`);
+    assert.equal((row.data?.expenses as { amountCents: number }[])[0].amountCents, expense.amountCents);
+  });
+
+  test("refuses writes when the database has no batch support", async () => {
+    const env = teamEnv();
+    const carId = await seedCar(env);
+    const real = requireDb(env);
+    const noBatch = { ...env, DB: { prepare: (q: string) => real.prepare(q) } };
+    assert.equal((await team(noBatch, "POST", `/cars/${carId}/expenses`, expense)).status, 500);
+  });
+
+  test("exact tier edges: 6 days 20%, 7 days 15%, 21 days 15%, 22 days 10%", async () => {
+    const env = teamEnv();
+    const carId = await seedCar(env);
+    const trips = [
+      { startDate: "2026-09-01", endDate: "2026-09-07" }, // 6 days
+      { startDate: "2026-09-02", endDate: "2026-09-09" }, // 7 days
+      { startDate: "2026-09-03", endDate: "2026-09-24" }, // 21 days
+      { startDate: "2026-09-04", endDate: "2026-09-26" }, // 22 days
+    ];
+    for (const trip of trips) {
+      assert.equal((await team(env, "POST", `/cars/${carId}/income`, { ...trip, payoutCents: 10000 })).status, 201);
+    }
+    const st = await team(env, "GET", `/cars/${carId}/statement?month=2026-09`);
+    const s = st.data?.statement as { trips: { days: number; feeRateBps: number; feeCents: number }[]; managementFeeCents: number };
+    assert.deepEqual(s.trips.map((t) => [t.days, t.feeRateBps, t.feeCents]), [
+      [6, 2000, 2000],
+      [7, 1500, 1500],
+      [21, 1500, 1500],
+      [22, 1000, 1000],
+    ]);
+    assert.equal(s.managementFeeCents, 6000);
+  });
+
+  test("basic rate limit on team routes", async () => {
+    const env = teamEnv();
+    for (let i = 0; i < TEAM_RATE_LIMIT.maxRequests; i++) {
+      assert.equal((await team(env, "GET", "/whoami")).status, 200);
+    }
+    assert.equal((await team(env, "GET", "/whoami")).status, 429);
+    resetTeamRateLimit();
+    for (let i = 0; i < TEAM_RATE_LIMIT.maxAuthFailures; i++) {
+      assert.equal((await team(env, "GET", "/cars", undefined, { authorization: "Bearer nope" })).status, 401);
+    }
+    assert.equal((await team(env, "GET", "/cars")).status, 429);
+  });
+
+  test("admin car delete after connector edits names the reason", async () => {
+    const env = teamEnv();
+    const carId = await seedCar(env);
+    await team(env, "PATCH", `/cars/${carId}`, { color: "Blue" });
+    const res = await call(env, "DELETE", `/api/portal/admin/cars/${carId}`);
+    assert.equal(res.status, 409);
+    assert.equal(res.data?.reason, "car_has_connector_history");
   });
 });

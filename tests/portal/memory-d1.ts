@@ -23,6 +23,18 @@ export function createMemoryD1(): PortalD1 {
     .sort();
   for (const name of files) db.exec(readFileSync(join(migrationsDir(), name), "utf8"));
   return {
+    async batch(statements: D1Prepared[]) {
+      db.exec("BEGIN");
+      try {
+        const results = [];
+        for (const statement of statements) results.push(await statement.run());
+        db.exec("COMMIT");
+        return results;
+      } catch (error) {
+        db.exec("ROLLBACK");
+        throw error;
+      }
+    },
     prepare(query: string): D1Prepared {
       const statement = db.prepare(query);
       let bound: SqlValue[] = [];

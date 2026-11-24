@@ -34,6 +34,7 @@ EXPENSE_CATEGORIES = (
     "maintenance", "cleaning", "tolls", "insurance", "fuel",
     "registration", "parking", "supplies", "other",
 )
+MAX_ENTRY_CENTS = 5_000_000  # keep equal to lib/portal/team-store.ts
 _MONTH = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
 
 
@@ -92,6 +93,8 @@ def _check_cents(name: str, value: Any, *, positive: bool = True) -> None:
         raise CarConnectorError(f"{name} must be a whole number of cents")
     if value < (1 if positive else 0):
         raise CarConnectorError(f"{name} must be {'positive' if positive else 'zero or more'}")
+    if value > MAX_ENTRY_CENTS:
+        raise CarConnectorError(f"{name} is over the per-entry cap of {MAX_ENTRY_CENTS} cents")
 
 
 def request(method: str, path: str, *, params: dict | None = None, body: dict | None = None,

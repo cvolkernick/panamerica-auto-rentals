@@ -54,6 +54,7 @@ def test_add_expense_body():
     {"entry_date": "2026-11-20", "category": "commission", "amount_cents": 1},
     {"entry_date": "2026-11-20", "category": "maintenance", "amount_cents": 0},
     {"entry_date": "2026-11-20", "category": "maintenance", "amount_cents": 45.99},
+    {"entry_date": "2026-11-20", "category": "maintenance", "amount_cents": 5_000_001},
 ])
 def test_add_expense_rejects_bad_input_before_sending(kwargs):
     seen = []
