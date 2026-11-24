@@ -1,21 +1,36 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { test } from "node:test";
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
+import { describe, test } from "node:test";
 
 import {
+  connectorCapabilitiesJson,
   CONNECTOR_DOC,
   CONNECTOR_EXPENSE_CATEGORIES,
   CONNECTOR_MAX_ENTRY_CENTS,
   CONNECTOR_NOT_SUPPORTED,
   CONNECTOR_TOOLS,
 } from "../../lib/portal/connector-capabilities";
+import type { PortalEnv } from "../../lib/portal/env";
 import { EXPENSE_CATEGORIES } from "../../lib/portal/expenses";
+import { handlePortal } from "../../lib/portal/handler";
 import { MAX_ENTRY_CENTS } from "../../lib/portal/team-store";
 
+import { call, DEALER, devEnv, PANAMERICA, request } from "./support";
+
 const MCP = "tools/car-connector-mcp/panam_car_mcp.py";
+const TEAM_TOKEN = "t".repeat(48);
 
 function source(path: string): string {
   return readFileSync(path, "utf8");
+}
+
+function walk(dir: string): string[] {
+  return readdirSync(dir).flatMap((name) => {
+    const path = join(dir, name);
+    if (statSync(path).isDirectory()) return walk(path);
+    return /\.(ts|tsx)$/.test(name) ? [path] : [];
+  });
 }
 
 /** Names of functions decorated with @mcp.tool() in the MCP server. */
@@ -61,15 +76,24 @@ test("the docs page expense categories match the API minus commission, and the M
   assert.ok(CONNECTOR_NOT_SUPPORTED.some((line) => /owner pii/i.test(line)));
 });
 
-test("the docs page renders from the capabilities module and carries a date", () => {
+test("the capabilities module stays server-only and carries a date", () => {
   assert.match(CONNECTOR_DOC.updated, /^\d{4}-\d{2}-\d{2}$/);
   const page = source("app/admin/connector/connector-docs.tsx");
-  assert.match(page, /CONNECTOR_TOOLS/);
-  assert.match(page, /CONNECTOR_NOT_SUPPORTED/);
-  assert.match(page, /CONNECTOR_DOC\.updated/);
+  assert.match(page, /\/api\/portal\/admin\/connector-capabilities/);
   assert.match(page, /isAdmin/);
   assert.doesNotMatch(page, /panam_[a-z_]+/, "tool names belong in connector-capabilities.ts only");
   assert.match(source("app/admin/admin-portal.tsx"), /href="\/admin\/connector\/"/);
+  assert.match(source("lib/portal/handler.ts"), /from "\.\/connector-capabilities"/);
+  // No page, component or client module may import the capability list.
+  const importsCapabilities = /(?:from|import\(|require\()\s*["'][^"']*connector-capabilities["']/;
+  for (const file of walk("app").concat(walk("components"))) {
+    assert.equal(importsCapabilities.test(source(file)), false, `${file} imports connector-capabilities`);
+  }
+  for (const file of walk("lib")) {
+    if (/^\s*["']use client["']/m.test(source(file))) {
+      assert.equal(importsCapabilities.test(source(file)), false, `${file} imports connector-capabilities`);
+    }
+  }
 });
 
 test("the docs page shows no token, secret, or endpoint credential", () => {
@@ -79,4 +103,48 @@ test("the docs page shows no token, secret, or endpoint credential", () => {
     assert.doesNotMatch(text, /\/api\/portal\/team/);
     assert.doesNotMatch(text, /[A-Za-z0-9_-]{40,}/);
   }
+});
+
+describe("GET /api/portal/admin/connector-capabilities", () => {
+  const path = "/api/portal/admin/connector-capabilities";
+
+  test("needs an admin session: 401 signed out, 401 with only the team token, 403 non-admin, 200 admin", async () => {
+    const admin = devEnv(PANAMERICA, { PORTAL_TEAM_TOKEN: TEAM_TOKEN });
+
+    const ok = await call(admin, "GET", path);
+    assert.equal(ok.status, 200);
+    assert.deepEqual(ok.data, connectorCapabilitiesJson());
+    assert.deepEqual(
+      (ok.data?.tools as { name: string }[]).map((tool) => tool.name),
+      CONNECTOR_TOOLS.map((tool) => tool.name)
+    );
+
+    const owner = await call(admin, "POST", "/api/portal/admin/owners", {
+      name: "Dealer Partner",
+      email: DEALER,
+    });
+    assert.equal(owner.status, 201);
+    const nonAdmin = await call({ ...admin, PORTAL_DEV_EMAIL: DEALER }, "GET", path);
+    assert.equal(nonAdmin.status, 403);
+    assert.equal(nonAdmin.text.includes("panam_list_cars"), false);
+
+    const stranger = await call({ ...admin, PORTAL_DEV_EMAIL: "stranger@example.com" }, "GET", path);
+    assert.equal(stranger.status, 403);
+    assert.equal(stranger.text.includes("panam_list_cars"), false);
+
+    const signedOut: PortalEnv = { DB: admin.DB, PORTAL_TEAM_TOKEN: TEAM_TOKEN };
+    const anon = await call(signedOut, "GET", path);
+    assert.equal(anon.status, 401);
+    assert.equal(anon.text.includes("panam_list_cars"), false);
+
+    const team = await handlePortal(
+      request("GET", path, {
+        origin: null,
+        headers: { authorization: `Bearer ${TEAM_TOKEN}`, "x-agent-name": "probe" },
+      }),
+      signedOut
+    );
+    assert.equal(team.status, 401);
+    assert.equal((await team.text()).includes("panam_list_cars"), false);
+  });
 });

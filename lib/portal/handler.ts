@@ -26,6 +26,7 @@ import {
   type LedgerRow,
   type OwnerRow,
 } from "./db";
+import { connectorCapabilitiesJson } from "./connector-capabilities";
 import type { PortalD1 } from "./d1";
 import type { PortalEnv } from "./env";
 import { portalApexRedirect } from "./hosts";
@@ -304,6 +305,11 @@ async function routeAdmin(
   method: string,
   actorId: number
 ): Promise<Response> {
+  if (path === "/api/portal/admin/connector-capabilities") {
+    if (method !== "GET") return methodNotAllowed("GET");
+    return json(connectorCapabilitiesJson());
+  }
+
   const managers = await routeAdminManagers(request, db, path, method, actorId);
   if (managers) return managers;
 

@@ -10,14 +10,23 @@ import {
   PortalNotice,
   PortalShell,
 } from "@/components/portal/ui";
-import {
-  CONNECTOR_DOC,
-  CONNECTOR_EXPENSE_CATEGORIES,
-  CONNECTOR_NOT_SUPPORTED,
-  CONNECTOR_RULES,
-  CONNECTOR_TOOLS,
-} from "@/lib/portal/connector-capabilities";
 import type { SessionJson } from "@/lib/portal/types";
+
+// This page is only a loader. The connector's capability list is served to admins by
+// GET /api/portal/admin/connector-capabilities and never ships in the static bundle.
+// Do not import lib/portal/connector-capabilities here (tests/build/connector-bundle.test.ts).
+
+type Tool = { name: string; access: "read" | "write"; summary: string };
+
+type Capabilities = {
+  title: string;
+  updated: string;
+  version: string;
+  expenseCategories: string[];
+  tools: Tool[];
+  notSupported: string[];
+  rules: string[];
+};
 
 type Gate =
   | { kind: "loading" }
@@ -25,8 +34,9 @@ type Gate =
   | { kind: "forbidden"; email?: string }
   | { kind: "not-admin" }
   | { kind: "error" }
-  | { kind: "ready" };
+  | { kind: "ready"; data: Capabilities };
 
+const PAGE_TITLE = "Team connector (MCP)";
 const heading = "font-heading text-sm tracking-[0.2em] text-gold uppercase";
 
 export function ConnectorDocs() {
@@ -41,7 +51,13 @@ export function ConnectorDocs() {
       if (session.status === 401) return setGate({ kind: "signed-out" });
       if (session.status === 403) return setGate({ kind: "forbidden", email: session.error?.email });
       if (session.network || !session.ok || !session.data) return setGate({ kind: "error" });
-      setGate(session.data.owner.isAdmin ? { kind: "ready" } : { kind: "not-admin" });
+      if (!session.data.owner.isAdmin) return setGate({ kind: "not-admin" });
+      const result = await portalRequest<Capabilities>("/api/portal/admin/connector-capabilities");
+      if (cancelled) return;
+      if (result.status === 401) return setGate({ kind: "signed-out" });
+      if (result.status === 403) return setGate({ kind: "not-admin" });
+      if (!result.ok || !result.data) return setGate({ kind: "error" });
+      setGate({ kind: "ready", data: result.data });
     })();
     return () => {
       cancelled = true;
@@ -60,23 +76,23 @@ export function ConnectorDocs() {
           ? "This page is for admins."
           : "Could not load the page. Refresh and try again.";
     return (
-      <PortalShell eyebrow="Admin" title={CONNECTOR_DOC.title}>
+      <PortalShell eyebrow="Admin" title={PAGE_TITLE}>
         <PortalNotice>{text}</PortalNotice>
       </PortalShell>
     );
   }
 
-  const reads = CONNECTOR_TOOLS.filter((tool) => tool.access === "read");
-  const writes = CONNECTOR_TOOLS.filter((tool) => tool.access === "write");
+  const data = gate.data;
+  const reads = data.tools.filter((tool) => tool.access === "read");
+  const writes = data.tools.filter((tool) => tool.access === "write");
 
   return (
     <PortalShell
       eyebrow="Admin"
-      title={CONNECTOR_DOC.title}
+      title={data.title}
       lede={
         <>
-          What team agents can and can&apos;t do to car records through the connector.
-          Updated {CONNECTOR_DOC.updated} · {CONNECTOR_DOC.version}.{" "}
+          Updated {data.updated} · {data.version}.{" "}
           <Link href="/admin/" className="text-gold hover:underline">
             Back to owners and cars
           </Link>
@@ -92,7 +108,7 @@ export function ConnectorDocs() {
           <ToolList label="Read" tools={reads} />
           <ToolList label="Write" tools={writes} />
           <p className="mt-4 text-sm leading-relaxed text-white/60">
-            Expense categories: {CONNECTOR_EXPENSE_CATEGORIES.join(", ")}.
+            Expense categories: {data.expenseCategories.join(", ")}.
           </p>
         </section>
 
@@ -101,7 +117,7 @@ export function ConnectorDocs() {
             Can&apos;t do
           </h2>
           <ul className="mt-4 space-y-2 text-sm leading-relaxed text-white/75">
-            {CONNECTOR_NOT_SUPPORTED.map((item) => (
+            {data.notSupported.map((item) => (
               <li key={item} className="flex gap-2">
                 <span aria-hidden className="text-red">
                   ✕
@@ -111,9 +127,9 @@ export function ConnectorDocs() {
             ))}
           </ul>
 
-          <h2 className={`${heading} mt-10`}>Rules on every write</h2>
+          <h2 className={`${heading} mt-10`}>Rules</h2>
           <ul className="mt-4 list-disc space-y-2 pl-5 text-sm leading-relaxed text-white/75">
-            {CONNECTOR_RULES.map((item) => (
+            {data.rules.map((item) => (
               <li key={item}>{item}</li>
             ))}
           </ul>
@@ -123,7 +139,7 @@ export function ConnectorDocs() {
   );
 }
 
-function ToolList({ label, tools }: { label: string; tools: readonly (typeof CONNECTOR_TOOLS)[number][] }) {
+function ToolList({ label, tools }: { label: string; tools: Tool[] }) {
   return (
     <div className="mt-5">
       <h3 className="text-xs font-semibold tracking-[0.16em] text-white/50 uppercase">{label}</h3>

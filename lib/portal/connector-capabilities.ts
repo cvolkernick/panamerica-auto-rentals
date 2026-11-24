@@ -1,6 +1,8 @@
 /**
  * Single source of truth for what the team car connector (MCP) can and cannot do.
- * Rendered on /admin/connector/. tests/portal/connector-capabilities.test.ts fails if
+ * SERVER ONLY: served to admins by GET /api/portal/admin/connector-capabilities and rendered
+ * by /admin/connector/. Never import this from a client component or page; the content must
+ * stay out of the public static bundle (tests/build/connector-bundle.test.ts checks out/). tests/portal/connector-capabilities.test.ts fails if
  * this list drifts from tools/car-connector-mcp/panam_car_mcp.py or the API limits.
  * When a tool or rule changes, update this file and bump `updated`.
  * No token values, secrets, or endpoint credentials belong here.
@@ -114,3 +116,19 @@ export const CONNECTOR_RULES: readonly string[] = [
   "Each car is self-contained. Nothing moves between cars.",
   "Access needs the team service token. Requests are rate limited.",
 ];
+
+/** JSON body for GET /api/portal/admin/connector-capabilities (admin session only). */
+export function connectorCapabilitiesJson() {
+  return {
+    title: CONNECTOR_DOC.title,
+    updated: CONNECTOR_DOC.updated,
+    version: CONNECTOR_DOC.version,
+    maxEntryCents: CONNECTOR_MAX_ENTRY_CENTS,
+    expenseCategories: [...CONNECTOR_EXPENSE_CATEGORIES],
+    tools: CONNECTOR_TOOLS.map((tool) => ({ ...tool })),
+    notSupported: [...CONNECTOR_NOT_SUPPORTED],
+    rules: [...CONNECTOR_RULES],
+  };
+}
+
+export type ConnectorCapabilitiesJson = ReturnType<typeof connectorCapabilitiesJson>;
