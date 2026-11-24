@@ -19,6 +19,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y poppler-utils
       - run: npm test
       - run: npm run build
+      - name: Connector content stays out of the public build
+        run: npm run test:bundle
 
   car-connector-mcp:
     runs-on: ubuntu-latest

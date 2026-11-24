@@ -34,4 +34,11 @@ There are no payout, period-close, owner, import, or car create/delete routes.
 
 ## Admin docs page
 
-`/admin/connector/` (admin sign-in required) shows what the connector can and can't do. It renders from `lib/portal/connector-capabilities.ts`, the one list to edit when a tool or rule changes. `tests/portal/connector-capabilities.test.ts` fails if that list drifts from the tools registered in `tools/car-connector-mcp/panam_car_mcp.py`, the per-entry cap, or the expense categories. A small link at the bottom of `/admin/` points to it.
+`/admin/connector/` shows what the connector can and can't do. The static page is only a loader. After the admin session check it fetches `GET /api/portal/admin/connector-capabilities`, which goes through the same server-side admin check as the other admin APIs: 401 when signed out (the team token does not count), 403 for non-admins.
+
+`lib/portal/connector-capabilities.ts` is the one list to edit when a tool or rule changes. It is server-only: only `lib/portal/handler.ts` imports it.
+
+- `tests/portal/connector-capabilities.test.ts` (in `npm test`) fails if the list drifts from the tools registered in `tools/car-connector-mcp/panam_car_mcp.py`, the per-entry cap, or the expense categories; if a page, component, or client module imports it; or if the endpoint answers without an admin session.
+- `tests/build/connector-bundle.test.ts` (`npm run test:bundle`, run in CI right after `npm run build`) greps every file under `out/` for the tool names, summaries, can't-do lines, rules, and the cap, and fails on any hit. Only the `/admin/` link label and the page title are allow-listed.
+
+A small link at the bottom of `/admin/` points to the page.
