@@ -5,8 +5,18 @@ Server side of the car connector MCP (`tools/car-connector-mcp`). See that READM
 - Auth: `Authorization: Bearer <PORTAL_TEAM_TOKEN>` (Pages secret, 32+ chars; unset = 404)
   and `X-Agent-Name` (1-80 chars, percent-encoded). Cookie sessions never reach these
   routes, and the token never opens `/api/portal/admin/*`.
-- Every write adds a `team_write_log` row (migration 0007) with the agent name, action,
-  car id, entity id, and before/after JSON.
+- `X-Agent-Name` is self-asserted: a label for the write log, never an authorization input.
+- Every write and its `team_write_log` row (migration 0007: agent name, action, car id,
+  entity id, before/after JSON) run in one D1 batch, so a write never lands unlogged.
+  Car JSON (reads and log) carries `ownerId` only: no owner name or email.
+- Per-entry cap: 5,000,000 cents ($50,000) on expense amounts and every income field
+  (`MAX_ENTRY_CENTS`).
+- Commission expense rows are admin-only: the connector cannot create, edit,
+  recategorize, or delete them.
+- Basic per-isolate rate limit: 120 requests/min per client IP, and 10 bad-token
+  attempts/min lock that IP out for the rest of the window (429).
+- An admin car delete is refused with `car_has_connector_history` once the connector
+  has written to that car (the log keeps a foreign key to the car).
 
 | Method | Path | Notes |
 |--------|------|-------|

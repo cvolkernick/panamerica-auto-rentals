@@ -23,8 +23,11 @@ before writing.
 | `panam_get_write_log(car_id?, limit?)` | `GET /write-log` | read |
 
 Not available, on purpose: creating or deleting cars, moving a car to another owner,
-payouts, period close, owner records, guest data, and `commission` expenses (the
-management fee is computed by the statement from trip income).
+payouts, period close, owner records (car data carries `ownerId` only), guest data,
+and `commission` expenses (the management fee is computed by the statement from trip
+income; existing commission rows are admin-only). Each entry is capped at 5,000,000
+cents ($50,000). `PANAM_AGENT_NAME` is a self-asserted label for the write log, not a
+credential.
 
 Money rules stay in the portal: expenses come out of the car's proceeds, a shortfall
 carries forward, payouts are due only on a net surplus, and the fee is figured per
