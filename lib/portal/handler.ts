@@ -35,6 +35,7 @@ import { ledgerTotals, monthBounds } from "./ledger";
 import { authenticate, handleLogin, handleLogout, handleSetupPassword, requireCsrf } from "./login";
 import { routeAdminManagers } from "./manager-routes";
 import { routeAdminMoney, routeOwnerMoney } from "./money-routes";
+import { handleTeam, isTeamPath } from "./team";
 import { carDeleteConflict } from "./money-store";
 import {
   parseCarCreate,
@@ -167,6 +168,8 @@ async function route(request: Request, env: PortalEnv): Promise<Response> {
   if (path === "/api/portal/login") return handleLogin(request, env, db);
   if (path === "/api/portal/setup-password") return handleSetupPassword(request, env, db);
   if (path === "/api/portal/invite") return handleInvite(request, env, db);
+  // Team connector: service token only. Cookie sessions never reach it, and the token never reaches admin routes.
+  if (isTeamPath(path)) return handleTeam(request, env, db, path);
 
   const auth = await authenticate(request, env, db);
   if (auth instanceof Response) return auth;

@@ -19,3 +19,13 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y poppler-utils
       - run: npm test
       - run: npm run build
+
+  car-connector-mcp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r tools/car-connector-mcp/requirements.txt pytest
+      - run: python -m pytest -q tools/car-connector-mcp/tests

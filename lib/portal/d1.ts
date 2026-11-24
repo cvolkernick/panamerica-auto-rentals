@@ -16,4 +16,6 @@ export interface D1Prepared {
 
 export interface PortalD1 {
   prepare(query: string): D1Prepared;
+  /** Runs the statements in order as one transaction (Cloudflare D1 batch). All or nothing. */
+  batch?(statements: D1Prepared[]): Promise<unknown[]>;
 }

@@ -10,4 +10,6 @@ export type PortalEnv = {
   PORTAL_SETUP_TOKEN?: string;
   /** HMAC pepper. Unset means login and setup cannot seal a password. */
   PORTAL_PEPPER?: string;
+  /** Team connector service token (Bearer). Unset or shorter than 32 chars disables /api/portal/team. */
+  PORTAL_TEAM_TOKEN?: string;
 };
