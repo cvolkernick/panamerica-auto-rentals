@@ -31,3 +31,7 @@ Server side of the car connector MCP (`tools/car-connector-mcp`). See that READM
 | GET | `/write-log` | `?carId=&limit=` (max 200), newest first |
 
 There are no payout, period-close, owner, import, or car create/delete routes.
+
+## Admin docs page
+
+`/admin/connector/` (admin sign-in required) shows what the connector can and can't do. It renders from `lib/portal/connector-capabilities.ts`, the one list to edit when a tool or rule changes. `tests/portal/connector-capabilities.test.ts` fails if that list drifts from the tools registered in `tools/car-connector-mcp/panam_car_mcp.py`, the per-entry cap, or the expense categories. A small link at the bottom of `/admin/` points to it.

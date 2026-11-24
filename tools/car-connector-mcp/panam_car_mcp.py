@@ -34,7 +34,7 @@ EXPENSE_CATEGORIES = (
     "maintenance", "cleaning", "tolls", "insurance", "fuel",
     "registration", "parking", "supplies", "other",
 )
-MAX_ENTRY_CENTS = 5_000_000  # keep equal to lib/portal/team-store.ts
+MAX_ENTRY_CENTS = 5_000_000  # keep equal to lib/portal/team-store.ts and connector-capabilities.ts
 _MONTH = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
 
 
@@ -274,7 +274,7 @@ def build_server():
 
     @mcp.tool()
     def panam_list_cars() -> dict:
-        """All fleet cars: id, year, make, model, color, licensePlate, vin, ownerId, ownerName."""
+        """All fleet cars: id, year, make, model, color, licensePlate, vin, ownerId (no owner name or email)."""
         return list_cars()
 
     @mcp.tool()
