@@ -86,6 +86,7 @@ test("portal pages ask robots not to index", () => {
     "app/admin/page.tsx",
     "app/admin/cars/page.tsx",
     "app/admin/imports/page.tsx",
+    "app/admin/managers/page.tsx",
     "app/owner/invite/page.tsx",
     "app/admin/statement/page.tsx",
     "app/owner/statement/page.tsx",

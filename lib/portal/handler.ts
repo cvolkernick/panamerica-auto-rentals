@@ -33,6 +33,7 @@ import { forbidden, json, readJson, validationError } from "./http";
 import { createOwnerInvite, handleInvite } from "./invite";
 import { ledgerTotals, monthBounds } from "./ledger";
 import { authenticate, handleLogin, handleLogout, handleSetupPassword, requireCsrf } from "./login";
+import { routeAdminManagers } from "./manager-routes";
 import { routeAdminMoney, routeOwnerMoney } from "./money-routes";
 import { handleTeam, isTeamPath } from "./team";
 import { carDeleteConflict } from "./money-store";
@@ -303,6 +304,9 @@ async function routeAdmin(
   method: string,
   actorId: number
 ): Promise<Response> {
+  const managers = await routeAdminManagers(request, db, path, method, actorId);
+  if (managers) return managers;
+
   const money = await routeAdminMoney(request, db, path, method, actorId);
   if (money) return money;
 

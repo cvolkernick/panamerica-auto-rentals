@@ -295,6 +295,12 @@ export function AdminPortal() {
           >
             Trip import
           </Link>
+          <Link
+            href="/admin/managers/"
+            className="font-heading text-sm tracking-[0.16em] text-gold uppercase hover:text-white"
+          >
+            Managers
+          </Link>
           <PortalLogout onDone={() => setReloadToken((value) => value + 1)} />
         </div>
       }
