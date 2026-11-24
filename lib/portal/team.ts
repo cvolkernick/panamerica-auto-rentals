@@ -13,36 +13,39 @@
  * - Statements: read-only. No payouts, no period close, no owner or guest data.
  * The management fee, carry-forward, and payout-due figures are computed by the
  * statement code from these rows; nothing here sets them.
+ *
+ * X-Agent-Name is self-asserted by the caller. It is a label for the write log only;
+ * nothing is authorized on it. The token is the only credential.
  */
-import { carJson, getCarById, listAllCars, uniqueField, updateCar, type CarRow } from "./db";
+import { carJson, getCarById, listAllCars, uniqueField, type CarRow } from "./db";
 import type { PortalD1 } from "./d1";
 import type { PortalEnv } from "./env";
-import { json, readJson, unauthorized, validationError } from "./http";
+import { clientIp } from "./hosts";
+import { json, rateLimited, readJson, unauthorized, validationError } from "./http";
 import { currentMonthEastern, monthBounds } from "./ledger";
-import {
-  deleteExpense,
-  expenseJson,
-  getExpense,
-  insertExpense,
-  listExpenses,
-  updateExpense,
-  type ExpenseRow,
-} from "./money-store";
+import { expenseJson, getExpense, listExpenses, type ExpenseRow } from "./money-store";
 import { secretsEqual } from "./secrets";
 import { carStatement } from "./statement-store";
 import {
   connectorCreated,
-  deleteManualIncome,
+  deleteExpenseStatement,
+  deleteManualIncomeStatement,
   getIncome,
   incomeJson,
-  insertManualIncome,
-  insertWriteLog,
+  insertExpenseStatement,
+  insertManualIncomeStatement,
   listIncome,
   listWriteLog,
   MANUAL_PLATFORM,
+  MAX_ENTRY_CENTS,
+  newManualTripId,
+  runLogged,
   teamActorId,
-  updateManualIncome,
+  updateCarStatement,
+  updateExpenseStatement,
+  updateManualIncomeStatement,
   writeLogJson,
+  writeLogStatement,
   type IncomeRow,
   type IncomeWrite,
 } from "./team-store";
@@ -51,7 +54,6 @@ import {
   parseExpenseCreate,
   parseExpensePatch,
   parseLedgerMonth,
-  type CarWrite,
   type ExpenseWrite,
   type FieldErrors,
 } from "./validate";
@@ -105,19 +107,51 @@ export function noteLooksLikePii(note: string | null | undefined): boolean {
   return EMAIL_LIKE.test(note) || PHONE_LIKE.test(note);
 }
 
-/** Car JSON for the connector: no owner email. */
+/** Car JSON for the connector: no owner name or email (ownerId only). Used for reads and the write log. */
 export function teamCarJson(row: CarRow) {
   const car = carJson(row);
   delete car.ownerEmail;
+  delete car.ownerName;
   return car;
+}
+
+/**
+ * Basic per-isolate rate limit for /api/portal/team. Each Worker isolate keeps its own
+ * window, so this is a brake on runaway loops, not a global quota.
+ */
+export const TEAM_RATE_LIMIT = { windowMs: 60_000, maxRequests: 120, maxAuthFailures: 10 } as const;
+const rateWindows = new Map<string, { start: number; requests: number; failures: number }>();
+
+function rateWindow(key: string, now: number) {
+  let window = rateWindows.get(key);
+  if (!window || now - window.start >= TEAM_RATE_LIMIT.windowMs) {
+    window = { start: now, requests: 0, failures: 0 };
+    rateWindows.set(key, window);
+    if (rateWindows.size > 5000) {
+      for (const [k, w] of rateWindows) if (now - w.start >= TEAM_RATE_LIMIT.windowMs) rateWindows.delete(k);
+    }
+  }
+  return window;
+}
+
+/** Test hook. */
+export function resetTeamRateLimit(): void {
+  rateWindows.clear();
 }
 
 async function authorize(request: Request, env: PortalEnv): Promise<{ agent: string } | Response> {
   const expected = env.PORTAL_TEAM_TOKEN?.trim() ?? "";
   if (expected.length < MIN_TEAM_TOKEN_LENGTH) return notFound();
+  const window = rateWindow(clientIp(request), Date.now());
+  if (window.failures >= TEAM_RATE_LIMIT.maxAuthFailures) return rateLimited();
+  window.requests += 1;
+  if (window.requests > TEAM_RATE_LIMIT.maxRequests) return rateLimited();
   const header = request.headers.get("authorization") ?? "";
   const match = /^Bearer ([A-Za-z0-9._~+/=-]{1,512})$/.exec(header.trim());
-  if (!match || !(await secretsEqual(match[1], expected))) return unauthorized("team_token");
+  if (!match || !(await secretsEqual(match[1], expected))) {
+    window.failures += 1;
+    return unauthorized("team_token");
+  }
   const agent = parseAgentName(request.headers.get(AGENT_HEADER));
   if (!agent) {
     return json(
@@ -142,6 +176,10 @@ function optionalCents(value: unknown, field: string, fields: FieldErrors, allow
     fields[field] = "Enter a whole number of cents.";
     return undefined;
   }
+  if (amount > MAX_ENTRY_CENTS) {
+    fields[field] = `At most ${MAX_ENTRY_CENTS} cents per entry.`;
+    return undefined;
+  }
   return amount;
 }
 
@@ -149,6 +187,10 @@ function requiredCents(value: unknown, field: string, fields: FieldErrors): numb
   const amount = typeof value === "string" && /^[1-9]\d*$/.test(value.trim()) ? Number(value.trim()) : value;
   if (typeof amount !== "number" || !Number.isSafeInteger(amount) || amount <= 0) {
     fields[field] = "Enter a positive whole number of cents.";
+    return undefined;
+  }
+  if (amount > MAX_ENTRY_CENTS) {
+    fields[field] = `At most ${MAX_ENTRY_CENTS} cents per entry.`;
     return undefined;
   }
   return amount;
@@ -230,6 +272,9 @@ function incomeWriteFromRow(row: IncomeRow): IncomeWrite {
 }
 
 function expenseGuard(value: Partial<ExpenseWrite>): FieldErrors | null {
+  if (value.amountCents !== undefined && value.amountCents > MAX_ENTRY_CENTS) {
+    return { amountCents: `At most ${MAX_ENTRY_CENTS} cents per entry.` };
+  }
   if (value.category === "commission") {
     return {
       category:
@@ -240,6 +285,17 @@ function expenseGuard(value: Partial<ExpenseWrite>): FieldErrors | null {
     return { note: "Leave out emails and phone numbers. Notes are for the vendor and what the expense was." };
   }
   return null;
+}
+
+function commissionLocked(): Response {
+  return json(
+    {
+      error: "forbidden",
+      reason: "commission_row",
+      detail: "Commission rows are admin-only. The connector cannot edit, recategorize, or delete them.",
+    },
+    403
+  );
 }
 
 function expenseWriteFromRow(row: ExpenseRow, patch: Partial<ExpenseWrite>): ExpenseWrite {
@@ -336,6 +392,7 @@ export async function handleTeam(request: Request, env: PortalEnv, db: PortalD1,
     const existing = await getExpense(db, carId, entityId);
     if (!existing) return notFound();
     if (method === "GET") return json({ expense: expenseJson(existing) });
+    if ((method === "PATCH" || method === "DELETE") && existing.category === "commission") return commissionLocked();
     if (method === "PATCH") return patchExpense(request, db, carId, existing, agent);
     if (method === "DELETE") {
       if (!(await connectorCreated(db, "expense.create", carId, entityId))) {
@@ -344,16 +401,19 @@ export async function handleTeam(request: Request, env: PortalEnv, db: PortalD1,
           403
         );
       }
-      await deleteExpense(db, carId, entityId);
-      await insertWriteLog(db, {
-        agentName: agent,
-        action: "expense.delete",
-        carId,
-        entityId,
-        before: expenseJson(existing),
-        after: null,
-      });
-      return json({ ok: true });
+      const [, logId] = await runLogged(
+        db,
+        deleteExpenseStatement(db, carId, entityId),
+        writeLogStatement(db, {
+          agentName: agent,
+          action: "expense.delete",
+          carId,
+          entityId,
+          before: expenseJson(existing),
+          after: null,
+        })
+      );
+      return json({ ok: true, writeLogId: logId });
     }
     return methodNotAllowed("GET, PATCH, DELETE");
   }
@@ -371,19 +431,29 @@ export async function handleTeam(request: Request, env: PortalEnv, db: PortalD1,
       if (!body.ok) return body.response;
       const parsed = parseIncome(body.value, null);
       if (!parsed.ok) return validationError(parsed.fields);
-      let id: number;
+      const externalTripId = newManualTripId();
+      let ids: number[];
       try {
-        id = await insertManualIncome(db, carId, parsed.value);
+        ids = await runLogged(
+          db,
+          insertManualIncomeStatement(db, carId, externalTripId, parsed.value),
+          writeLogStatement(db, {
+            agentName: agent,
+            action: "income.create",
+            carId,
+            entityId: "last_insert",
+            before: null,
+            after: { carId, platform: MANUAL_PLATFORM, externalTripId, ...parsed.value },
+          })
+        );
       } catch (error) {
         const denied = constraintResponse(error);
         if (denied) return denied;
         throw error;
       }
-      const row = await getIncome(db, carId, id);
+      const row = await getIncome(db, carId, ids[0]);
       if (!row) return json({ error: "server_error" }, 500);
-      const after = incomeJson(row);
-      const logId = await insertWriteLog(db, { agentName: agent, action: "income.create", carId, entityId: id, before: null, after });
-      return json({ income: after, writeLogId: logId }, 201);
+      return json({ income: incomeJson(row), writeLogId: ids[1] }, 201);
     }
     return methodNotAllowed("GET, POST");
   }
@@ -401,23 +471,39 @@ export async function handleTeam(request: Request, env: PortalEnv, db: PortalD1,
     if (!(await connectorCreated(db, "income.create", carId, entityId))) {
       return json({ error: "forbidden", reason: "not_connector_entry" }, 403);
     }
-    await deleteManualIncome(db, carId, entityId);
-    await insertWriteLog(db, {
-      agentName: agent,
-      action: "income.delete",
-      carId,
-      entityId,
-      before: incomeJson(existingIncome),
-      after: null,
-    });
-    return json({ ok: true });
+    const [, logId] = await runLogged(
+      db,
+      deleteManualIncomeStatement(db, carId, entityId),
+      writeLogStatement(db, {
+        agentName: agent,
+        action: "income.delete",
+        carId,
+        entityId,
+        before: incomeJson(existingIncome),
+        after: null,
+      })
+    );
+    return json({ ok: true, writeLogId: logId });
   }
   const body = await readJson(request);
   if (!body.ok) return body.response;
   const parsed = parseIncome(body.value, incomeWriteFromRow(existingIncome));
   if (!parsed.ok) return validationError(parsed.fields);
+  const before = incomeJson(existingIncome);
+  let ids: number[];
   try {
-    await updateManualIncome(db, carId, entityId, parsed.value);
+    ids = await runLogged(
+      db,
+      updateManualIncomeStatement(db, carId, entityId, parsed.value),
+      writeLogStatement(db, {
+        agentName: agent,
+        action: "income.update",
+        carId,
+        entityId,
+        before,
+        after: { ...before, ...parsed.value },
+      })
+    );
   } catch (error) {
     const denied = constraintResponse(error);
     if (denied) return denied;
@@ -425,16 +511,7 @@ export async function handleTeam(request: Request, env: PortalEnv, db: PortalD1,
   }
   const updated = await getIncome(db, carId, entityId);
   if (!updated) return notFound();
-  const after = incomeJson(updated);
-  const logId = await insertWriteLog(db, {
-    agentName: agent,
-    action: "income.update",
-    carId,
-    entityId,
-    before: incomeJson(existingIncome),
-    after,
-  });
-  return json({ income: after, writeLogId: logId });
+  return json({ income: incomeJson(updated), writeLogId: ids[1] });
 }
 
 async function patchCar(request: Request, db: PortalD1, car: CarRow, agent: string): Promise<Response> {
@@ -445,8 +522,7 @@ async function patchCar(request: Request, db: PortalD1, car: CarRow, agent: stri
   }
   const parsed = parseCarPatch(body.value);
   if (!parsed.ok) return validationError(parsed.fields);
-  const next: CarWrite = {
-    ownerId: Number(car.owner_id),
+  const next = {
     year: parsed.value.year ?? Number(car.year),
     make: parsed.value.make ?? car.make,
     model: parsed.value.model ?? car.model,
@@ -454,8 +530,21 @@ async function patchCar(request: Request, db: PortalD1, car: CarRow, agent: stri
     licensePlate: parsed.value.licensePlate ?? car.license_plate,
     vin: parsed.value.vin ?? car.vin,
   };
+  const before = teamCarJson(car);
+  let ids: number[];
   try {
-    await updateCar(db, Number(car.id), next);
+    ids = await runLogged(
+      db,
+      updateCarStatement(db, Number(car.id), next),
+      writeLogStatement(db, {
+        agentName: agent,
+        action: "car.update",
+        carId: Number(car.id),
+        entityId: Number(car.id),
+        before,
+        after: { ...before, ...next },
+      })
+    );
   } catch (error) {
     if (uniqueField(error) === "vin") {
       return json({ error: "conflict", fields: { vin: "A car with this VIN already exists." } }, 409);
@@ -464,16 +553,7 @@ async function patchCar(request: Request, db: PortalD1, car: CarRow, agent: stri
   }
   const row = await getCarById(db, Number(car.id));
   if (!row) return notFound();
-  const after = teamCarJson(row);
-  const logId = await insertWriteLog(db, {
-    agentName: agent,
-    action: "car.update",
-    carId: Number(car.id),
-    entityId: Number(car.id),
-    before: teamCarJson(car),
-    after,
-  });
-  return json({ car: after, writeLogId: logId });
+  return json({ car: teamCarJson(row), writeLogId: ids[1] });
 }
 
 async function createExpense(
@@ -489,19 +569,28 @@ async function createExpense(
   if (!parsed.ok) return validationError(parsed.fields);
   const guard = expenseGuard(parsed.value);
   if (guard) return validationError(guard);
-  let id: number;
+  let ids: number[];
   try {
-    id = await insertExpense(db, carId, parsed.value, actorId);
+    ids = await runLogged(
+      db,
+      insertExpenseStatement(db, carId, parsed.value, actorId),
+      writeLogStatement(db, {
+        agentName: agent,
+        action: "expense.create",
+        carId,
+        entityId: "last_insert",
+        before: null,
+        after: { carId, ...parsed.value },
+      })
+    );
   } catch (error) {
     const denied = constraintResponse(error);
     if (denied) return denied;
     throw error;
   }
-  const row = await getExpense(db, carId, id);
+  const row = await getExpense(db, carId, ids[0]);
   if (!row) return json({ error: "server_error" }, 500);
-  const after = expenseJson(row);
-  const logId = await insertWriteLog(db, { agentName: agent, action: "expense.create", carId, entityId: id, before: null, after });
-  return json({ expense: after, writeLogId: logId }, 201);
+  return json({ expense: expenseJson(row), writeLogId: ids[1] }, 201);
 }
 
 async function patchExpense(
@@ -518,8 +607,21 @@ async function patchExpense(
   const guard = expenseGuard(parsed.value);
   if (guard) return validationError(guard);
   const next = expenseWriteFromRow(existing, parsed.value);
+  const before = expenseJson(existing);
+  let ids: number[];
   try {
-    await updateExpense(db, carId, Number(existing.id), next);
+    ids = await runLogged(
+      db,
+      updateExpenseStatement(db, carId, Number(existing.id), next),
+      writeLogStatement(db, {
+        agentName: agent,
+        action: "expense.update",
+        carId,
+        entityId: Number(existing.id),
+        before,
+        after: { ...before, ...next },
+      })
+    );
   } catch (error) {
     const denied = constraintResponse(error);
     if (denied) return denied;
@@ -527,14 +629,5 @@ async function patchExpense(
   }
   const row = await getExpense(db, carId, Number(existing.id));
   if (!row) return notFound();
-  const after = expenseJson(row);
-  const logId = await insertWriteLog(db, {
-    agentName: agent,
-    action: "expense.update",
-    carId,
-    entityId: Number(existing.id),
-    before: expenseJson(existing),
-    after,
-  });
-  return json({ expense: after, writeLogId: logId });
+  return json({ expense: expenseJson(row), writeLogId: ids[1] });
 }

@@ -1,5 +1,5 @@
 import { randomToken } from "./codec";
-import type { PortalD1 } from "./d1";
+import type { D1Prepared, PortalD1 } from "./d1";
 
 /** Platform label for income entered through the team connector. Imports never use it. */
 export const MANUAL_PLATFORM = "manual";
@@ -69,32 +69,92 @@ export async function teamActorId(db: PortalD1): Promise<number | null> {
   return row ? Number(row.id) : null;
 }
 
-export async function insertWriteLog(
-  db: PortalD1,
-  entry: {
-    agentName: string;
-    action: TeamAction;
-    carId: number;
-    entityId: number;
-    before: unknown;
-    after: unknown;
-  }
-): Promise<number> {
-  const result = await db
+/** Largest single expense or income entry the connector accepts: $50,000. */
+export const MAX_ENTRY_CENTS = 5_000_000;
+
+type LogEntry = {
+  agentName: string;
+  action: TeamAction;
+  carId: number;
+  /** "last_insert" binds to the row the previous statement in the same batch inserted. */
+  entityId: number | "last_insert";
+  before: unknown;
+  after: unknown;
+};
+
+function jsonOrNull(value: unknown): string | null {
+  return value === null || value === undefined ? null : JSON.stringify(value);
+}
+
+export function writeLogStatement(db: PortalD1, entry: LogEntry): D1Prepared {
+  const entitySql = entry.entityId === "last_insert" ? "last_insert_rowid()" : "?";
+  const values: unknown[] = [entry.agentName, entry.action, entry.carId];
+  if (entry.entityId !== "last_insert") values.push(entry.entityId);
+  values.push(jsonOrNull(entry.before), jsonOrNull(entry.after));
+  return db
     .prepare(
       `INSERT INTO team_write_log (agent_name, action, car_id, entity_id, before_json, after_json)
+       VALUES (?, ?, ?, ${entitySql}, ?, ?)`
+    )
+    .bind(...values);
+}
+
+/**
+ * Runs a write and its log row as one D1 batch (one transaction). If the log row fails,
+ * the write rolls back too. Returns the last_row_id of each statement.
+ */
+export async function runLogged(db: PortalD1, write: D1Prepared, log: D1Prepared): Promise<number[]> {
+  if (typeof db.batch !== "function") throw new Error("d1_batch_unavailable");
+  const results = (await db.batch([write, log])) as { meta?: { last_row_id?: number } }[];
+  return results.map((result) => Number(result?.meta?.last_row_id ?? 0));
+}
+
+export function insertExpenseStatement(
+  db: PortalD1,
+  carId: number,
+  expense: { entryDate: string; category: string; amountCents: number; note: string | null },
+  actorId: number
+): D1Prepared {
+  return db
+    .prepare(
+      `INSERT INTO expenses (car_id, entry_date, category, amount_cents, note, created_by)
        VALUES (?, ?, ?, ?, ?, ?)`
     )
-    .bind(
-      entry.agentName,
-      entry.action,
-      entry.carId,
-      entry.entityId,
-      entry.before === null || entry.before === undefined ? null : JSON.stringify(entry.before),
-      entry.after === null || entry.after === undefined ? null : JSON.stringify(entry.after)
+    .bind(carId, expense.entryDate, expense.category, expense.amountCents, expense.note, actorId);
+}
+
+export function updateExpenseStatement(
+  db: PortalD1,
+  carId: number,
+  expenseId: number,
+  expense: { entryDate: string; category: string; amountCents: number; note: string | null }
+): D1Prepared {
+  return db
+    .prepare(
+      `UPDATE expenses
+       SET entry_date = ?, category = ?, amount_cents = ?, note = ?,
+           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+       WHERE id = ? AND car_id = ?`
     )
-    .run();
-  return Number(result.meta.last_row_id);
+    .bind(expense.entryDate, expense.category, expense.amountCents, expense.note, expenseId, carId);
+}
+
+export function deleteExpenseStatement(db: PortalD1, carId: number, expenseId: number): D1Prepared {
+  return db.prepare(`DELETE FROM expenses WHERE id = ? AND car_id = ?`).bind(expenseId, carId);
+}
+
+export function updateCarStatement(
+  db: PortalD1,
+  carId: number,
+  car: { year: number; make: string; model: string; color: string; licensePlate: string; vin: string }
+): D1Prepared {
+  return db
+    .prepare(
+      `UPDATE cars SET year = ?, make = ?, model = ?, color = ?, license_plate = ?, vin = ?,
+         updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+       WHERE id = ?`
+    )
+    .bind(car.year, car.make, car.model, car.color, car.licensePlate, car.vin, carId);
 }
 
 export async function listWriteLog(
@@ -200,13 +260,17 @@ export async function getIncome(db: PortalD1, carId: number, id: number): Promis
     .first<IncomeRow>();
 }
 
-export async function insertManualIncome(
+export function newManualTripId(): string {
+  return `manual-${randomToken(9)}`;
+}
+
+export function insertManualIncomeStatement(
   db: PortalD1,
   carId: number,
+  externalId: string,
   income: IncomeWrite
-): Promise<number> {
-  const externalId = `manual-${randomToken(9)}`;
-  const result = await db
+): D1Prepared {
+  return db
     .prepare(
       `INSERT INTO trips (
          car_id, platform, external_trip_id, start_date, end_date, status, counts_as_income,
@@ -223,18 +287,16 @@ export async function insertManualIncome(
       income.platformFeesCents,
       income.payoutCents,
       income.taxCents
-    )
-    .run();
-  return Number(result.meta.last_row_id);
+    );
 }
 
-export async function updateManualIncome(
+export function updateManualIncomeStatement(
   db: PortalD1,
   carId: number,
   id: number,
   income: IncomeWrite
-): Promise<void> {
-  await db
+): D1Prepared {
+  return db
     .prepare(
       `UPDATE trips
        SET start_date = ?, end_date = ?, gross_cents = ?, platform_fees_cents = ?,
@@ -251,13 +313,11 @@ export async function updateManualIncome(
       id,
       carId,
       MANUAL_PLATFORM
-    )
-    .run();
+    );
 }
 
-export async function deleteManualIncome(db: PortalD1, carId: number, id: number): Promise<void> {
-  await db
+export function deleteManualIncomeStatement(db: PortalD1, carId: number, id: number): D1Prepared {
+  return db
     .prepare(`DELETE FROM trips WHERE id = ? AND car_id = ? AND platform = ?`)
-    .bind(id, carId, MANUAL_PLATFORM)
-    .run();
+    .bind(id, carId, MANUAL_PLATFORM);
 }
