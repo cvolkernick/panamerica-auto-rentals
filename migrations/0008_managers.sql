@@ -1,6 +1,11 @@
--- Manager role, phase 1: managers, each with one share of the company fee, and
--- per-car manager assignments with history. Amounts stay integer cents elsewhere;
--- share_bps is basis points (1250 = 12.5%) of the management fee on each trip.
+-- Manager role, phase 1: managers, a dated history of each manager's share of the
+-- company fee, and per-car manager assignments with history. Amounts stay integer cents
+-- elsewhere; share_bps is basis points (1250 = 12.5%) of the management fee on each trip.
+--
+-- Share rates: a change applies forward only, from its effective_from date (inclusive).
+-- A trip uses the rate in effect on its start_date. Past accrual is never re-rated.
+-- Rates are append-only; a new rate must be dated after the manager's latest rate.
+-- An assignment can't start before the manager's first rate, so every trip has a rate.
 -- No guest data, no bank details, no manager payouts or reimbursements here (later phases).
 --
 -- Assignment dates: start_date is inclusive, end_date is exclusive (the day the next
@@ -17,11 +22,24 @@ PRAGMA foreign_keys = ON;
 CREATE TABLE managers (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL COLLATE NOCASE UNIQUE CHECK (length(name) BETWEEN 1 AND 80),
-  share_bps INTEGER NOT NULL CHECK (share_bps BETWEEN 0 AND 10000),
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   created_by INTEGER NOT NULL,
   FOREIGN KEY (created_by) REFERENCES owners (id) ON DELETE RESTRICT
+);
+
+CREATE TABLE manager_share_rates (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  manager_id INTEGER NOT NULL,
+  share_bps INTEGER NOT NULL CHECK (share_bps BETWEEN 0 AND 10000),
+  effective_from TEXT NOT NULL CHECK (
+    effective_from GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]-[0-3][0-9]'
+  ),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  created_by INTEGER NOT NULL,
+  FOREIGN KEY (manager_id) REFERENCES managers (id) ON DELETE RESTRICT,
+  FOREIGN KEY (created_by) REFERENCES owners (id) ON DELETE RESTRICT,
+  UNIQUE (manager_id, effective_from)
 );
 
 CREATE TABLE car_manager_assignments (

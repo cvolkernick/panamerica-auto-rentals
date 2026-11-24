@@ -8,8 +8,12 @@ import {
   managerShareCents,
   parseAssignment,
   parseManagerCreate,
+  parseManagerPatch,
+  parseRateCreate,
   percentToBps,
   planAssignment,
+  rateOn,
+  rateWriteError,
 } from "../../lib/portal/managers";
 import type { StatementTripInput } from "../../lib/portal/statement";
 import type { PortalEnv } from "../../lib/portal/env";
@@ -91,7 +95,7 @@ describe("manager share math", () => {
 
   test("accrual uses the tier fee on counted income, per trip, inside the assignment window", () => {
     const accrual = buildManagerAccrual({
-      shareBps: 2500,
+      rates: [{ share_bps: 2500, effective_from: "2026-01-01" }],
       assignments: [{ id: 1, car_id: 7, start_date: "2026-11-01", end_date: "2026-12-01" }],
       tripsByCar: new Map([
         [
@@ -126,6 +130,52 @@ describe("manager share math", () => {
     assert.deepEqual(accrual.months, [{ month: "2026-11", tripCount: 3, feeCents: 45000, shareCents: 11250 }]);
     assert.deepEqual(accrual.cars, [{ carId: 7, tripCount: 3, feeCents: 45000, shareCents: 11250 }]);
   });
+
+  test("mid-month rate change: trips before keep the old rate, trips on or after use the new one", () => {
+    const rates = [
+      { share_bps: 1000, effective_from: "2026-11-01" },
+      { share_bps: 2000, effective_from: "2026-11-15" },
+    ];
+    assert.equal(rateOn(rates, "2026-11-14"), 1000);
+    assert.equal(rateOn(rates, "2026-11-15"), 2000);
+    assert.equal(rateOn(rates, "2026-10-31"), null);
+    const accrual = buildManagerAccrual({
+      rates,
+      assignments: [{ id: 1, car_id: 7, start_date: "2026-11-01", end_date: null }],
+      tripsByCar: new Map([
+        [
+          7,
+          [
+            // $100 fee each (3-day trips on $500)
+            trip({ id: 1, startDate: "2026-11-10", endDate: "2026-11-13", incomeCents: 50000 }),
+            // starts the day before the change, ends after it: still the old rate (start-date rule)
+            trip({ id: 2, startDate: "2026-11-14", endDate: "2026-11-17", incomeCents: 50000 }),
+            trip({ id: 3, startDate: "2026-11-15", endDate: "2026-11-18", incomeCents: 50000 }),
+            trip({ id: 4, startDate: "2026-11-25", endDate: "2026-11-28", incomeCents: 50000 }),
+          ],
+        ],
+      ]),
+    });
+    assert.deepEqual(
+      accrual.trips.map((t) => [t.tripId, t.shareBps, t.shareCents]),
+      [
+        [1, 1000, 1000],
+        [2, 1000, 1000],
+        [3, 2000, 2000],
+        [4, 2000, 2000],
+      ]
+    );
+    assert.equal(accrual.accruedCents, 6000);
+    assert.deepEqual(accrual.months, [{ month: "2026-11", tripCount: 4, feeCents: 40000, shareCents: 6000 }]);
+  });
+
+  test("rates are append-only: backdating and duplicate dates are refused", () => {
+    const rates = [{ effective_from: "2026-11-01" }, { effective_from: "2026-11-15" }];
+    assert.ok(rateWriteError(rates, { shareBps: 1, effectiveFrom: "2026-11-10" })?.effectiveFrom);
+    assert.match(rateWriteError(rates, { shareBps: 1, effectiveFrom: "2026-11-15" })?.effectiveFrom ?? "", /already starts/);
+    assert.equal(rateWriteError(rates, { shareBps: 1, effectiveFrom: "2026-11-16" }), null);
+    assert.equal(rateWriteError([], { shareBps: 1, effectiveFrom: "2020-01-01" }), null);
+  });
 });
 
 describe("assignment rules", () => {
@@ -134,10 +184,15 @@ describe("assignment rules", () => {
     assert.equal(parseAssignment({ managerId: null, startDate: "2026-11-01" }).ok, true);
     assert.equal(parseAssignment({ managerId: 0, startDate: "2026-11-01" }).ok, false);
     assert.equal(parseAssignment({ managerId: 1, startDate: "2026-02-30" }).ok, false);
-    assert.equal(parseManagerCreate({ name: "Ana", shareBps: 1000 }).ok, true);
-    assert.equal(parseManagerCreate({ name: "Ana", shareBps: 10001 }).ok, false);
-    assert.equal(parseManagerCreate({ name: "ana@example.com", shareBps: 1000 }).ok, false);
-    assert.equal(parseManagerCreate({ name: "Ana 239-555-0101", shareBps: 1000 }).ok, false);
+    const d = "2026-11-01";
+    assert.equal(parseManagerCreate({ name: "Ana", shareBps: 1000, effectiveFrom: d }).ok, true);
+    assert.equal(parseManagerCreate({ name: "Ana", shareBps: 1000 }).ok, false);
+    assert.equal(parseManagerCreate({ name: "Ana", shareBps: 10001, effectiveFrom: d }).ok, false);
+    assert.equal(parseManagerCreate({ name: "ana@example.com", shareBps: 1000, effectiveFrom: d }).ok, false);
+    assert.equal(parseManagerCreate({ name: "Ana 239-555-0101", shareBps: 1000, effectiveFrom: d }).ok, false);
+    assert.equal(parseManagerPatch({ shareBps: 1000 }).ok, false);
+    assert.equal(parseManagerPatch({ name: "Ana B" }).ok, true);
+    assert.equal(parseRateCreate({ shareBps: 1500, effectiveFrom: "2026-11-31" }).ok, false);
   });
 
   test("reassign closes the open row and opens a new one on the same date", () => {
@@ -175,6 +230,8 @@ describe("manager admin routes", () => {
       ["GET", "/api/portal/admin/managers"],
       ["POST", "/api/portal/admin/managers"],
       ["GET", "/api/portal/admin/managers/1"],
+      ["GET", "/api/portal/admin/managers/1/rates"],
+      ["POST", "/api/portal/admin/managers/1/rates"],
       ["GET", "/api/portal/admin/cars/1/managers"],
       ["POST", "/api/portal/admin/cars/1/managers"],
       ["POST", "/api/portal/admin/cars/1/managers/undo"],
@@ -189,13 +246,18 @@ describe("manager admin routes", () => {
     const carA = await seedCar(env, "TEST001", "1HGCM82633A004352");
     const carB = await seedCar(env, "TEST002", "2HGCM82633A004353");
 
-    const ana = await call(env, "POST", "/api/portal/admin/managers", { name: "Ana Test", shareBps: 2500 });
+    const ana = await call(env, "POST", "/api/portal/admin/managers", { name: "Ana Test", shareBps: 2500, effectiveFrom: "2026-11-01" });
     assert.equal(ana.status, 201);
     const anaId = (ana.data?.manager as { id: number }).id;
-    const ben = await call(env, "POST", "/api/portal/admin/managers", { name: "Ben Test", shareBps: 1000 });
+    const ben = await call(env, "POST", "/api/portal/admin/managers", { name: "Ben Test", shareBps: 1000, effectiveFrom: "2026-11-01" });
     const benId = (ben.data?.manager as { id: number }).id;
-    const dup = await call(env, "POST", "/api/portal/admin/managers", { name: "ana test", shareBps: 1 });
+    const dup = await call(env, "POST", "/api/portal/admin/managers", { name: "ana test", shareBps: 1, effectiveFrom: "2026-11-01" });
     assert.equal(dup.status, 409);
+
+    // A manager can't have a car before their first share rate starts.
+    const early = await call(env, "POST", `/api/portal/admin/cars/${carA}/managers`, { managerId: anaId, startDate: "2026-10-31" });
+    assert.equal(early.status, 400);
+    assert.ok((early.data?.fields as Record<string, string>).startDate);
 
     // Ana gets both cars from Nov 1.
     assert.equal((await call(env, "POST", `/api/portal/admin/cars/${carA}/managers`, { managerId: anaId, startDate: "2026-11-01" })).status, 201);
@@ -260,10 +322,36 @@ describe("manager admin routes", () => {
     const back = await call(env, "POST", `/api/portal/admin/cars/${carB}/managers/undo`);
     assert.equal((back.data?.current as { managerId: number }).managerId, anaId);
 
-    // Changing the share re-figures the accrual.
-    const patched = await call(env, "PATCH", `/api/portal/admin/managers/${benId}`, { shareBps: 5000 });
-    assert.equal(patched.status, 200);
-    assert.equal((patched.data?.manager as { shareBps: number }).shareBps, 5000);
+    // Share rate change, forward only. Owner statements before and after must match.
+    const stmtBefore = (await call(env, "GET", `/api/portal/admin/cars/${carA}/statement?month=2026-11`)).text;
+    const stmtBeforeB = (await call(env, "GET", `/api/portal/admin/cars/${carB}/statement?month=2026-11`)).text;
+    // Ana (25%) has car A again after the undo. Add a car A trip on Nov 25 at $500 / 3 days ($100 fee).
+    await seedTrip(env, carA, "A3", "2026-11-25", "2026-11-28", 50000);
+    // A1 (Nov 5) and B1 (Nov 10) were earned at 25%. Ana moves to 40% from Nov 20.
+    const backdated = await call(env, "POST", `/api/portal/admin/managers/${anaId}/rates`, { shareBps: 4000, effectiveFrom: "2026-10-15" });
+    assert.equal(backdated.status, 400);
+    const duplicate = await call(env, "POST", `/api/portal/admin/managers/${anaId}/rates`, { shareBps: 4000, effectiveFrom: "2026-11-01" });
+    assert.equal(duplicate.status, 400);
+    const raised = await call(env, "POST", `/api/portal/admin/managers/${anaId}/rates`, { shareBps: 4000, effectiveFrom: "2026-11-20" });
+    assert.equal(raised.status, 201);
+    const rates = (raised.data?.manager as { rates: { shareBps: number; effectiveFrom: string }[] }).rates;
+    assert.deepEqual(rates.map((r) => [r.effectiveFrom, r.shareBps]), [["2026-11-01", 2500], ["2026-11-20", 4000]]);
+    const raisedAccrual = raised.data?.accrual as { accruedCents: number; trips: { tripId: number; startDate: string; shareBps: number; shareCents: number }[] };
+    // A1 $100 x 25% = $25, B1 $150 x 25% = $37.50, A2 (Nov 20, Ana again after undo) $100 x 40% = $40, A3 $100 x 40% = $40.
+    assert.deepEqual(
+      raisedAccrual.trips.map((t) => [t.startDate, t.shareBps, t.shareCents]),
+      [["2026-11-05", 2500, 2500], ["2026-11-10", 2500, 3750], ["2026-11-20", 4000, 4000], ["2026-11-25", 4000, 4000]]
+    );
+    assert.equal(raisedAccrual.accruedCents, 14250);
+    // Rate rows are never re-rated in place.
+    assert.equal((await call(env, "PATCH", `/api/portal/admin/managers/${benId}`, { shareBps: 5000 })).status, 400);
+    assert.equal((await call(env, "PATCH", `/api/portal/admin/managers/${benId}`, { name: "Ben Tester" })).status, 200);
+    // Owner statements unchanged by the rate change (car A gained a trip, so compare B exactly and A's fee rule).
+    assert.equal((await call(env, "GET", `/api/portal/admin/cars/${carB}/statement?month=2026-11`)).text, stmtBeforeB);
+    const afterA = (await call(env, "GET", `/api/portal/admin/cars/${carA}/statement?month=2026-11`)).data?.statement as { managementFeeCents: number; expenseCents: number };
+    const beforeA = JSON.parse(stmtBefore).statement as { managementFeeCents: number; expenseCents: number };
+    assert.equal(afterA.managementFeeCents, beforeA.managementFeeCents + 10000); // only the new trip's fee
+    assert.equal(afterA.expenseCents, beforeA.expenseCents);
   });
 
   test("bad input and missing records", async () => {
@@ -274,5 +362,113 @@ describe("manager admin routes", () => {
     assert.equal((await call(env, "GET", `/api/portal/admin/managers/999`)).status, 404);
     assert.equal((await call(env, "POST", `/api/portal/admin/cars/${car}/managers/undo`)).status, 409);
     assert.equal((await call(env, "DELETE", `/api/portal/admin/managers/1`)).status, 404);
+  });
+});
+
+describe("share rate history and atomic assignment writes", () => {
+  test("a later % change leaves earlier trips' accrued share exactly as it was", async () => {
+    const env = devEnv(PANAMERICA);
+    const car = await seedCar(env, "TEST010", "4HGCM82633A004355");
+    const created = await call(env, "POST", "/api/portal/admin/managers", { name: "Cleo Test", shareBps: 1000, effectiveFrom: "2026-10-01" });
+    const id = (created.data?.manager as { id: number }).id;
+    await call(env, "POST", `/api/portal/admin/cars/${car}/managers`, { managerId: id, startDate: "2026-10-01" });
+    // Oct 3-day $500 ($100 fee), Nov 10-day $1,000 ($150 fee), both before the change.
+    await seedTrip(env, car, "C1", "2026-10-05", "2026-10-08", 50000);
+    await seedTrip(env, car, "C2", "2026-11-03", "2026-11-13", 100000);
+    type Trip = { tripId: number; startDate: string; shareBps: number; shareCents: number };
+    const before = (await call(env, "GET", `/api/portal/admin/managers/${id}`)).data?.accrual as { accruedCents: number; trips: Trip[]; months: unknown[] };
+    assert.equal(before.accruedCents, 2500);
+    const stmtBefore = (await call(env, "GET", `/api/portal/admin/cars/${car}/statement?month=2026-11`)).text;
+
+    // Raise to 50% from Nov 16, then a trip after the change.
+    assert.equal((await call(env, "POST", `/api/portal/admin/managers/${id}/rates`, { shareBps: 5000, effectiveFrom: "2026-11-16" })).status, 201);
+    const statementAfterRate = (await call(env, "GET", `/api/portal/admin/cars/${car}/statement?month=2026-11`)).text;
+    assert.equal(statementAfterRate, stmtBefore, "owner statement byte-identical after a rate change");
+    await seedTrip(env, car, "C3", "2026-11-20", "2026-11-23", 50000);
+
+    const after = (await call(env, "GET", `/api/portal/admin/managers/${id}`)).data?.accrual as { accruedCents: number; trips: Trip[]; months: { month: string; shareCents: number }[] };
+    // Earlier trips: identical rate and cents.
+    assert.deepEqual(after.trips.slice(0, 2), before.trips);
+    assert.deepEqual(after.trips.map((t) => [t.startDate, t.shareBps, t.shareCents]), [
+      ["2026-10-05", 1000, 1000],
+      ["2026-11-03", 1000, 1500],
+      ["2026-11-20", 5000, 5000],
+    ]);
+    assert.equal(after.months.find((m) => m.month === "2026-10")?.shareCents, 1000);
+    assert.equal(after.accruedCents, 7500);
+
+    // Backdating before the latest rate and a duplicate date are both refused; history unchanged.
+    assert.equal((await call(env, "POST", `/api/portal/admin/managers/${id}/rates`, { shareBps: 9000, effectiveFrom: "2026-11-01" })).status, 400);
+    assert.equal((await call(env, "POST", `/api/portal/admin/managers/${id}/rates`, { shareBps: 9000, effectiveFrom: "2026-11-16" })).status, 400);
+    const rates = (await call(env, "GET", `/api/portal/admin/managers/${id}/rates`)).data?.rates as { effectiveFrom: string; shareBps: number }[];
+    assert.deepEqual(rates.map((r) => [r.effectiveFrom, r.shareBps]), [["2026-10-01", 1000], ["2026-11-16", 5000]]);
+  });
+
+  function failingDb(env: PortalEnv, pattern: RegExp): PortalEnv {
+    const base = requireDb(env);
+    return {
+      ...env,
+      DB: {
+        batch: base.batch?.bind(base),
+        prepare(query: string) {
+          const inner = base.prepare(query);
+          const fail = pattern.test(query);
+          const wrapped = {
+            bind(...values: unknown[]) {
+              inner.bind(...values);
+              return wrapped;
+            },
+            all: <T>() => inner.all<T>(),
+            first: <T>() => inner.first<T>(),
+            run: () => (fail ? Promise.reject(new Error("injected failure")) : inner.run()),
+          };
+          return wrapped;
+        },
+      },
+    };
+  }
+
+  async function setupTwo(env: PortalEnv) {
+    const car = await seedCar(env, "TEST020", "5HGCM82633A004356");
+    const a = (await call(env, "POST", "/api/portal/admin/managers", { name: "Dee Test", shareBps: 1000, effectiveFrom: "2026-10-01" })).data?.manager as { id: number };
+    const b = (await call(env, "POST", "/api/portal/admin/managers", { name: "Eli Test", shareBps: 1000, effectiveFrom: "2026-10-01" })).data?.manager as { id: number };
+    assert.equal((await call(env, "POST", `/api/portal/admin/cars/${car}/managers`, { managerId: a.id, startDate: "2026-11-01" })).status, 201);
+    return { car, a: a.id, b: b.id };
+  }
+
+  function historyOf(data: Record<string, unknown> | null) {
+    return (data?.history as { managerId: number; startDate: string; endDate: string | null }[]).map((r) => [r.managerId, r.startDate, r.endDate]);
+  }
+
+  test("reassign: if the new row's insert fails, the close rolls back and the prior manager stays", async () => {
+    const env = devEnv(PANAMERICA);
+    const { car, a, b } = await setupTwo(env);
+    const broken = failingDb(env, /INSERT INTO car_manager_assignments/);
+    const result = await call(broken, "POST", `/api/portal/admin/cars/${car}/managers`, { managerId: b, startDate: "2026-11-15" });
+    assert.equal(result.status, 500);
+    const after = await call(env, "GET", `/api/portal/admin/cars/${car}/managers`);
+    assert.deepEqual(historyOf(after.data), [[a, "2026-11-01", null]]);
+    assert.equal((after.data?.current as { managerId: number }).managerId, a);
+  });
+
+  test("undo last: if reopening the prior row fails, the delete rolls back too", async () => {
+    const env = devEnv(PANAMERICA);
+    const { car, a, b } = await setupTwo(env);
+    await call(env, "POST", `/api/portal/admin/cars/${car}/managers`, { managerId: b, startDate: "2026-11-15" });
+    const broken = failingDb(env, /SET end_date = NULL/);
+    assert.equal((await call(broken, "POST", `/api/portal/admin/cars/${car}/managers/undo`)).status, 500);
+    const after = await call(env, "GET", `/api/portal/admin/cars/${car}/managers`);
+    assert.deepEqual(historyOf(after.data), [
+      [b, "2026-11-15", null],
+      [a, "2026-11-01", "2026-11-15"],
+    ]);
+  });
+
+  test("creating a manager: if the first rate insert fails, no manager row is left behind", async () => {
+    const env = devEnv(PANAMERICA);
+    const broken = failingDb(env, /INSERT INTO manager_share_rates/);
+    assert.equal((await call(broken, "POST", "/api/portal/admin/managers", { name: "Fay Test", shareBps: 1000, effectiveFrom: "2026-10-01" })).status, 500);
+    const list = await call(env, "GET", "/api/portal/admin/managers");
+    assert.deepEqual(list.data?.managers, []);
   });
 });

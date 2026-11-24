@@ -2,6 +2,9 @@
  * Manager role, phase 1 (docs/manager-role.md).
  *
  * - An admin creates managers and sets each one's share of the company fee, in basis points.
+ *   The share has a dated history (manager_share_rates). A change applies forward only from
+ *   its effective date; each trip uses the rate in effect on the trip's start date, so past
+ *   accrual is never re-rated. Rates are append-only and must be dated after the latest one.
  * - An admin assigns cars to managers. Each car has at most one manager at a time, and the
  *   assignment history is kept with start (inclusive) and end (exclusive) dates.
  * - A manager's accrued share is figured per trip: the trip's management fee (the tier fee on
@@ -19,9 +22,16 @@ export const MAX_SHARE_BPS = 10000;
 export type ManagerRow = {
   id: number;
   name: string;
-  share_bps: number;
   created_at: string;
   updated_at: string;
+};
+
+export type RateRow = {
+  id: number;
+  manager_id: number;
+  share_bps: number;
+  effective_from: string;
+  created_at: string;
 };
 
 export type AssignmentRow = {
@@ -38,8 +48,9 @@ export type AssignmentRow = {
   car_license_plate?: string;
 };
 
-export type ManagerWrite = { name: string; shareBps: number };
-export type ManagerPatch = Partial<ManagerWrite>;
+export type ManagerWrite = { name: string; shareBps: number; effectiveFrom: string };
+export type ManagerPatch = { name: string };
+export type RateWrite = { shareBps: number; effectiveFrom: string };
 export type AssignmentWrite = { managerId: number | null; startDate: string };
 
 type FieldErrors = Record<string, string>;
@@ -107,28 +118,72 @@ export function bpsToPercentLabel(bps: number): string {
   return `${whole}.${String(frac).padStart(2, "0").replace(/0$/, "")}%`;
 }
 
+function parseEffectiveFrom(value: unknown, fields: FieldErrors): string | undefined {
+  if (!isRealDate(value)) {
+    fields.effectiveFrom = "Use a real date as YYYY-MM-DD.";
+    return;
+  }
+  return value;
+}
+
+/** Create seeds the first rate row: { name, shareBps, effectiveFrom }. */
 export function parseManagerCreate(body: unknown): Parsed<ManagerWrite> {
   if (!isRecord(body)) return { ok: false, fields: { body: "Send a JSON object." } };
   const fields: FieldErrors = {};
   const name = parseName(body.name, fields);
   const shareBps = parseShareBps(body.shareBps, fields);
-  if (Object.keys(fields).length > 0 || name === undefined || shareBps === undefined) {
+  const effectiveFrom = parseEffectiveFrom(body.effectiveFrom, fields);
+  if (Object.keys(fields).length > 0 || name === undefined || shareBps === undefined || effectiveFrom === undefined) {
     return { ok: false, fields };
   }
-  return { ok: true, value: { name, shareBps } };
+  return { ok: true, value: { name, shareBps, effectiveFrom } };
 }
 
+/** Name only. The share changes through a dated rate (parseRateCreate), never in place. */
 export function parseManagerPatch(body: unknown): Parsed<ManagerPatch> {
   if (!isRecord(body)) return { ok: false, fields: { body: "Send a JSON object." } };
-  const fields: FieldErrors = {};
-  const value: ManagerPatch = {};
-  if ("name" in body) value.name = parseName(body.name, fields);
-  if ("shareBps" in body) value.shareBps = parseShareBps(body.shareBps, fields);
-  if (Object.keys(fields).length > 0) return { ok: false, fields };
-  if (value.name === undefined && value.shareBps === undefined) {
-    return { ok: false, fields: { body: "Nothing to update." } };
+  if ("shareBps" in body) {
+    return { ok: false, fields: { shareBps: "Change the share by adding a dated rate. Past share is never re-rated." } };
   }
-  return { ok: true, value };
+  const fields: FieldErrors = {};
+  const name = "name" in body ? parseName(body.name, fields) : undefined;
+  if (Object.keys(fields).length > 0) return { ok: false, fields };
+  if (name === undefined) return { ok: false, fields: { body: "Nothing to update." } };
+  return { ok: true, value: { name } };
+}
+
+export function parseRateCreate(body: unknown): Parsed<RateWrite> {
+  if (!isRecord(body)) return { ok: false, fields: { body: "Send a JSON object." } };
+  const fields: FieldErrors = {};
+  const shareBps = parseShareBps(body.shareBps, fields);
+  const effectiveFrom = parseEffectiveFrom(body.effectiveFrom, fields);
+  if (Object.keys(fields).length > 0 || shareBps === undefined || effectiveFrom === undefined) {
+    return { ok: false, fields };
+  }
+  return { ok: true, value: { shareBps, effectiveFrom } };
+}
+
+/** Rates are append-only: a new one must be dated after the latest. Blocks backdating and duplicates. */
+export function rateWriteError(rates: { effective_from: string }[], write: RateWrite): FieldErrors | null {
+  const latest = rates.map((rate) => rate.effective_from).sort().pop();
+  if (latest && write.effectiveFrom <= latest) {
+    return {
+      effectiveFrom:
+        write.effectiveFrom === latest
+          ? `A rate already starts on ${latest}.`
+          : `Use a date after ${latest}, the latest rate. Past share is never re-rated.`,
+    };
+  }
+  return null;
+}
+
+/** The rate in effect on a date: the latest rate whose effective_from is on or before it. */
+export function rateOn(rates: { share_bps: number; effective_from: string }[], date: string): number | null {
+  let found: { share_bps: number; effective_from: string } | null = null;
+  for (const rate of rates) {
+    if (rate.effective_from <= date && (!found || rate.effective_from > found.effective_from)) found = rate;
+  }
+  return found ? Number(found.share_bps) : null;
 }
 
 export function parseAssignment(body: unknown): Parsed<AssignmentWrite> {
@@ -171,6 +226,7 @@ export type AccrualTrip = {
   feeRateBps: number;
   incomeCents: number;
   feeCents: number;
+  shareBps: number;
   shareCents: number;
 };
 
@@ -178,7 +234,6 @@ export type AccrualMonth = { month: string; tripCount: number; feeCents: number;
 export type AccrualCar = { carId: number; tripCount: number; feeCents: number; shareCents: number };
 
 export type ManagerAccrual = {
-  shareBps: number;
   tripCount: number;
   feeCents: number;
   accruedCents: number;
@@ -189,10 +244,11 @@ export type ManagerAccrual = {
 
 /**
  * Pure. Trips per car come in with the statement input shape. Only trips that count as
- * income earn a fee, so only those earn a share.
+ * income earn a fee, so only those earn a share. Each trip uses the rate in effect on its
+ * start date. A trip before the first rate (cannot happen through the API) earns nothing.
  */
 export function buildManagerAccrual(input: {
-  shareBps: number;
+  rates: { share_bps: number; effective_from: string }[];
   assignments: { id: number; car_id: number; start_date: string; end_date: string | null }[];
   tripsByCar: Map<number, StatementTripInput[]>;
 }): ManagerAccrual {
@@ -203,6 +259,7 @@ export function buildManagerAccrual(input: {
       if (!trip.countsAsIncome || !assignmentCovers(assignment, trip.startDate)) continue;
       const fee = feeForTrip(trip);
       if (fee.feeCents <= 0) continue;
+      const shareBps = rateOn(input.rates, trip.startDate) ?? 0;
       trips.push({
         carId,
         assignmentId: Number(assignment.id),
@@ -214,7 +271,8 @@ export function buildManagerAccrual(input: {
         feeRateBps: fee.feeRateBps,
         incomeCents: trip.incomeCents,
         feeCents: fee.feeCents,
-        shareCents: managerShareCents(fee.feeCents, input.shareBps),
+        shareBps,
+        shareCents: managerShareCents(fee.feeCents, shareBps),
       });
     }
   }
@@ -235,7 +293,6 @@ export function buildManagerAccrual(input: {
     cars.set(trip.carId, c);
   }
   return {
-    shareBps: input.shareBps,
     tripCount: trips.length,
     feeCents: trips.reduce((sum, trip) => sum + trip.feeCents, 0),
     accruedCents: trips.reduce((sum, trip) => sum + trip.shareCents, 0),
@@ -287,7 +344,19 @@ export function planAssignment(
 
 // ---------- store ----------
 
-const MANAGER_COLUMNS = "id, name, share_bps, created_at, updated_at";
+const MANAGER_COLUMNS = "id, name, created_at, updated_at";
+const RATE_COLUMNS = "id, manager_id, share_bps, effective_from, created_at";
+
+/**
+ * Runs the statements as one D1 batch: a single transaction, all or nothing. Multi-row
+ * manager writes never fall back to separate steps, so a failed insert can't leave a car
+ * without its manager or a manager without its first rate.
+ */
+async function runAll(db: PortalD1, statements: ReturnType<PortalD1["prepare"]>[]): Promise<void> {
+  if (typeof db.batch !== "function") throw new Error("d1_batch_required");
+  await db.batch(statements);
+}
+
 const ASSIGNMENT_SELECT = `SELECT a.id, a.car_id, a.manager_id, a.start_date, a.end_date, a.created_at,
        m.name AS manager_name, c.year AS car_year, c.make AS car_make, c.model AS car_model,
        c.license_plate AS car_license_plate
@@ -304,21 +373,77 @@ export async function getManager(db: PortalD1, id: number): Promise<ManagerRow |
   return db.prepare(`SELECT ${MANAGER_COLUMNS} FROM managers WHERE id = ?`).bind(id).first<ManagerRow>();
 }
 
+/** Manager and its first rate row, together. Returns the new manager id. */
 export async function insertManager(db: PortalD1, write: ManagerWrite, actorId: number): Promise<number> {
+  await runAll(
+    db,
+    [
+      db.prepare(`INSERT INTO managers (name, created_by) VALUES (?, ?)`).bind(write.name, actorId),
+      db
+        .prepare(
+          `INSERT INTO manager_share_rates (manager_id, share_bps, effective_from, created_by)
+           SELECT id, ?, ?, ? FROM managers WHERE name = ?`
+        )
+        .bind(write.shareBps, write.effectiveFrom, actorId, write.name),
+    ]
+  );
+  const row = await db.prepare(`SELECT id FROM managers WHERE name = ?`).bind(write.name).first<{ id: number }>();
+  if (!row) throw new Error("manager_insert_failed");
+  return Number(row.id);
+}
+
+export async function updateManagerName(db: PortalD1, id: number, name: string): Promise<void> {
+  await db
+    .prepare(`UPDATE managers SET name = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?`)
+    .bind(name, id)
+    .run();
+}
+
+export async function listRates(db: PortalD1, managerId: number): Promise<RateRow[]> {
   const result = await db
-    .prepare(`INSERT INTO managers (name, share_bps, created_by) VALUES (?, ?, ?)`)
-    .bind(write.name, write.shareBps, actorId)
+    .prepare(`SELECT ${RATE_COLUMNS} FROM manager_share_rates WHERE manager_id = ? ORDER BY effective_from, id`)
+    .bind(managerId)
+    .all<RateRow>();
+  return result.results;
+}
+
+export async function listAllRates(db: PortalD1): Promise<RateRow[]> {
+  const result = await db
+    .prepare(`SELECT ${RATE_COLUMNS} FROM manager_share_rates ORDER BY manager_id, effective_from, id`)
+    .all<RateRow>();
+  return result.results;
+}
+
+export async function insertRate(db: PortalD1, managerId: number, write: RateWrite, actorId: number): Promise<number> {
+  const result = await db
+    .prepare(
+      `INSERT INTO manager_share_rates (manager_id, share_bps, effective_from, created_by) VALUES (?, ?, ?, ?)`
+    )
+    .bind(managerId, write.shareBps, write.effectiveFrom, actorId)
     .run();
   return Number(result.meta.last_row_id);
 }
 
-export async function updateManager(db: PortalD1, id: number, write: ManagerWrite): Promise<void> {
-  await db
-    .prepare(
-      `UPDATE managers SET name = ?, share_bps = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?`
-    )
-    .bind(write.name, write.shareBps, id)
-    .run();
+/** Close the open assignment and open the next one together (reassign). */
+export async function reassign(
+  db: PortalD1,
+  close: { id: number; endDate: string },
+  open: { carId: number; managerId: number; startDate: string },
+  actorId: number
+): Promise<void> {
+  await runAll(
+    db,
+    [
+      db
+        .prepare(`UPDATE car_manager_assignments SET end_date = ? WHERE id = ? AND end_date IS NULL`)
+        .bind(close.endDate, close.id),
+      db
+        .prepare(
+          `INSERT INTO car_manager_assignments (car_id, manager_id, start_date, created_by) VALUES (?, ?, ?, ?)`
+        )
+        .bind(open.carId, open.managerId, open.startDate, actorId),
+    ]
+  );
 }
 
 export async function listAssignmentsForCar(db: PortalD1, carId: number): Promise<AssignmentRow[]> {
@@ -371,6 +496,18 @@ export async function insertAssignment(
   return Number(result.meta.last_row_id);
 }
 
+/** Undo a reassignment: drop the newest row and reopen the one it replaced, together. */
+export async function undoReassign(db: PortalD1, carId: number, deleteId: number, reopenId: number): Promise<void> {
+  // Delete first so the open-assignment unique index never sees two open rows.
+  await runAll(
+    db,
+    [
+      db.prepare(`DELETE FROM car_manager_assignments WHERE id = ? AND car_id = ?`).bind(deleteId, carId),
+      db.prepare(`UPDATE car_manager_assignments SET end_date = NULL WHERE id = ? AND car_id = ?`).bind(reopenId, carId),
+    ]
+  );
+}
+
 export async function deleteAssignment(db: PortalD1, carId: number, id: number): Promise<void> {
   await db.prepare(`DELETE FROM car_manager_assignments WHERE id = ? AND car_id = ?`).bind(id, carId).run();
 }
@@ -421,25 +558,42 @@ export async function tripsForCars(db: PortalD1, carIds: number[]): Promise<Map<
   return map;
 }
 
-export async function managerAccrual(db: PortalD1, manager: ManagerRow, assignments: AssignmentRow[]) {
+export async function managerAccrual(db: PortalD1, rates: RateRow[], assignments: AssignmentRow[]) {
   const tripsByCar = await tripsForCars(
     db,
     assignments.map((row) => Number(row.car_id))
   );
-  return buildManagerAccrual({ shareBps: Number(manager.share_bps), assignments, tripsByCar });
+  return buildManagerAccrual({ rates, assignments, tripsByCar });
 }
 
 // ---------- json ----------
 
-export function managerJson(row: ManagerRow) {
+export function rateJson(row: RateRow) {
+  return {
+    id: Number(row.id),
+    shareBps: Number(row.share_bps),
+    effectiveFrom: row.effective_from,
+    createdAt: row.created_at,
+  };
+}
+
+/** shareBps is the rate in effect today; nextRate is a future-dated rate, if one is set. */
+export function managerJson(row: ManagerRow, rates: RateRow[], today: string) {
+  const sorted = [...rates].sort((a, b) => (a.effective_from < b.effective_from ? -1 : 1));
+  const next = sorted.find((rate) => rate.effective_from > today) ?? null;
   return {
     id: Number(row.id),
     name: row.name,
-    shareBps: Number(row.share_bps),
+    shareBps: rateOn(sorted, today),
+    firstEffectiveFrom: sorted[0]?.effective_from ?? null,
+    nextRate: next ? rateJson(next) : null,
+    rates: sorted.map(rateJson),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
 }
+
+export type RateJson = ReturnType<typeof rateJson>;
 
 export function assignmentJson(row: AssignmentRow) {
   return {
