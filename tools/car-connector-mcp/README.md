@@ -1,0 +1,78 @@
+# Panamerica car connector (MCP)
+
+A thin stdio MCP server over the portal team API (`/api/portal/team/*`), modeled on
+the FitDash MCP. Team agents use it to read and write car records. It does not read
+receipt photos: the calling agent reads the receipt itself and passes structured
+fields (date, category, amount in cents, short note). If anything is unclear, ask
+before writing.
+
+| Tool | Endpoint | Access |
+|------|----------|--------|
+| `panam_list_cars` | `GET /cars` | read |
+| `panam_get_car(car_id)` | `GET /cars/:id` | read |
+| `panam_update_car(car_id, year?, make?, model?, color?, license_plate?, vin?)` | `PATCH /cars/:id` | write |
+| `panam_list_expenses(car_id, month?)` | `GET /cars/:id/expenses` | read |
+| `panam_add_expense(car_id, entry_date, category, amount_cents, note?)` | `POST /cars/:id/expenses` | write |
+| `panam_update_expense(car_id, expense_id, ...)` | `PATCH /cars/:id/expenses/:eid` | write |
+| `panam_delete_expense(car_id, expense_id)` | `DELETE /cars/:id/expenses/:eid` (connector-created rows only) | write |
+| `panam_list_income(car_id, month?)` | `GET /cars/:id/income` | read |
+| `panam_add_income(car_id, start_date, end_date, payout_cents, ...)` | `POST /cars/:id/income` | write |
+| `panam_update_income(car_id, income_id, ...)` | `PATCH /cars/:id/income/:tid` (manual income only) | write |
+| `panam_delete_income(car_id, income_id)` | `DELETE /cars/:id/income/:tid` (connector-created manual income only) | write |
+| `panam_get_statement(car_id, month?)` | `GET /cars/:id/statement` | read |
+| `panam_get_write_log(car_id?, limit?)` | `GET /write-log` | read |
+
+Not available, on purpose: creating or deleting cars, moving a car to another owner,
+payouts, period close, owner records (car data carries `ownerId` only), guest data,
+and `commission` expenses (the management fee is computed by the statement from trip
+income; existing commission rows are admin-only). Each entry is capped at 5,000,000
+cents ($50,000). `PANAM_AGENT_NAME` is a self-asserted label for the write log, not a
+credential.
+
+Money rules stay in the portal: expenses come out of the car's proceeds, a shortfall
+carries forward, payouts are due only on a net surplus, and the fee is figured per
+trip on the platform's net payout (under 7 days 20%, 7-21 days 15%, over 21 days 10%).
+Each car is self-contained.
+
+## Install
+
+```bash
+python3 -m venv ~/.venvs/panam-car-mcp
+~/.venvs/panam-car-mcp/bin/pip install -r tools/car-connector-mcp/requirements.txt
+```
+
+## Configuration (env)
+
+| Var | Default | Notes |
+|-----|---------|-------|
+| `PANAM_TEAM_TOKEN` | — | Bearer token. Takes precedence over the file. |
+| `PANAM_TEAM_TOKEN_FILE` | `~/.config/panam-car-connector/token` | Keep it mode 600. Never commit it. |
+| `PANAM_AGENT_NAME` | — | Required. Your agent name; stored on every write. |
+| `PANAM_API_BASE` | `https://www.panamericafleet.com` | |
+| `PANAM_TIMEOUT` | `20` | seconds |
+
+The server side reads the same secret as `PORTAL_TEAM_TOKEN` (a Pages secret). Unset
+or shorter than 32 characters means `/api/portal/team` answers 404.
+
+## Register it
+
+```json
+{
+  "mcpServers": {
+    "panam-cars": {
+      "command": "/home/you/.venvs/panam-car-mcp/bin/python",
+      "args": ["/path/to/panamerica-auto-rentals/tools/car-connector-mcp/panam_car_mcp.py"],
+      "env": {
+        "PANAM_TEAM_TOKEN_FILE": "/path/to/token",
+        "PANAM_AGENT_NAME": "YourAgentName"
+      }
+    }
+  }
+}
+```
+
+## Tests
+
+```bash
+python -m pytest -q tools/car-connector-mcp/tests
+```
