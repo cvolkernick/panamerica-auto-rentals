@@ -47,8 +47,9 @@ Spec: Chris t1702u (11/24 1:16 AM ET). This PR is phase 1 only.
 1. Resolved (Grok, 11/24): fees accrue to whoever managed the car on the trip's start date.
 2. Resolved (Grok, 11/24): a share change applies forward only from its effective date, with
    dated rate history; past accrual is never re-rated.
-3. **Open (Chris):** should managers earn a share on Panamerica-owned cars? Current default,
-   unchanged: yes. The statement code computes a fee on every car, and the share follows it.
+3. Resolved (Chris, 5:22 PM ET 11/24): managers earn a share on all cars, including
+   Panamerica-owned ones. This matches the build: the statement code computes a fee on every
+   car, and the share follows it.
 
 ## Apply (after Grok's go, not part of this PR)
 `npx wrangler d1 execute panamerica-portal --remote --file=migrations/0008_managers.sql`, after a

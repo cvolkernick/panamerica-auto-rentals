@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start --port 43147",
     "lint": "eslint",
-    "test": "node --disable-warning=ExperimentalWarning --import tsx --test tests/portal/*.test.ts"
+    "test": "node --disable-warning=ExperimentalWarning --import tsx --test tests/portal/*.test.ts",
+    "test:bundle": "node --disable-warning=ExperimentalWarning --import tsx --test tests/build/*.test.ts"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",
