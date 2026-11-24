@@ -64,13 +64,19 @@ function usd(cents: number): string {
   return formatUsdFromCents(cents);
 }
 
+function shareLabel(bps: number | null): string {
+  return bps === null ? "Not started" : bpsToPercentLabel(bps);
+}
+
 export function ManagersAdmin() {
   const [gate, setGate] = useState<Gate>({ kind: "loading" });
   const [email, setEmail] = useState("");
   const [managers, setManagers] = useState<ManagerRow[]>([]);
   const [current, setCurrent] = useState<AssignmentJson[]>([]);
   const [cars, setCars] = useState<CarJson[]>([]);
-  const [form, setForm] = useState({ name: "", percent: "" });
+  const [form, setForm] = useState({ name: "", percent: "", effectiveFrom: todayEastern() });
+  const [rateForm, setRateForm] = useState({ percent: "", effectiveFrom: todayEastern() });
+  const [rateErrors, setRateErrors] = useState<Record<string, string>>({});
   const [editId, setEditId] = useState<number | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [assign, setAssign] = useState<Record<number, { managerId: string; startDate: string }>>({});
@@ -127,13 +133,15 @@ export function ManagersAdmin() {
     const shareBps = percentToBps(form.percent);
     const next: Record<string, string> = {};
     if (!form.name.trim()) next.name = "Enter a name.";
-    if (shareBps === null) next.shareBps = "Enter a percent from 0 to 100, up to two decimals.";
+    if (!editId && shareBps === null) next.shareBps = "Enter a percent from 0 to 100, up to two decimals.";
     if (Object.keys(next).length) return setErrors(next);
     setSaving(true);
     setMessage("");
     const result = await portalRequest<{ manager: ManagerJson }>(
       editId ? `/api/portal/admin/managers/${editId}` : "/api/portal/admin/managers",
-      { method: editId ? "PATCH" : "POST", body: { name: form.name, shareBps } }
+      editId
+        ? { method: "PATCH", body: { name: form.name } }
+        : { method: "POST", body: { name: form.name, shareBps, effectiveFrom: form.effectiveFrom } }
     );
     setSaving(false);
     if (!result.ok) {
@@ -141,10 +149,33 @@ export function ManagersAdmin() {
       return setMessage("Could not save the manager.");
     }
     setErrors({});
-    setForm({ name: "", percent: "" });
+    setForm({ name: "", percent: "", effectiveFrom: todayEastern() });
     setMessage(editId ? "Manager saved." : "Manager added.");
     if (editId && detail?.manager.id === editId) await openDetail(editId);
     setEditId(null);
+    setReloadToken((value) => value + 1);
+  }
+
+  async function addRate(event: FormEvent) {
+    event.preventDefault();
+    if (!detail) return;
+    const shareBps = percentToBps(rateForm.percent);
+    if (shareBps === null) return setRateErrors({ shareBps: "Enter a percent from 0 to 100, up to two decimals." });
+    setSaving(true);
+    setMessage("");
+    const result = await portalRequest<Detail>(`/api/portal/admin/managers/${detail.manager.id}/rates`, {
+      method: "POST",
+      body: { shareBps, effectiveFrom: rateForm.effectiveFrom },
+    });
+    setSaving(false);
+    if (!result.ok || !result.data) {
+      setRateErrors(fieldsFrom(result.error));
+      return setMessage("Could not change the share.");
+    }
+    setRateErrors({});
+    setRateForm({ percent: "", effectiveFrom: todayEastern() });
+    setDetail(result.data);
+    setMessage("Share change saved. It applies from its date forward; earlier trips keep their rate.");
     setReloadToken((value) => value + 1);
   }
 
@@ -251,7 +282,14 @@ export function ManagersAdmin() {
                 {managers.map((m) => (
                   <tr key={m.id} className="border-t border-white/10">
                     <td className={td}>{m.name}</td>
-                    <td className={td}>{bpsToPercentLabel(m.shareBps)}</td>
+                    <td className={td}>
+                      {shareLabel(m.shareBps)}
+                      {m.nextRate ? (
+                        <span className="block text-xs text-white/55">
+                          {bpsToPercentLabel(m.nextRate.shareBps)} from {m.nextRate.effectiveFrom}
+                        </span>
+                      ) : null}
+                    </td>
                     <td className={td}>
                       {m.currentCars.length === 0
                         ? "None"
@@ -270,7 +308,7 @@ export function ManagersAdmin() {
                         className="text-gold hover:underline"
                         onClick={() => {
                           setEditId(m.id);
-                          setForm({ name: m.name, percent: (m.shareBps / 100).toString() });
+                          setForm({ name: m.name, percent: "", effectiveFrom: todayEastern() });
                           setErrors({});
                         }}
                       >
@@ -284,7 +322,7 @@ export function ManagersAdmin() {
           )}
         </div>
 
-        <form className={`mt-6 grid gap-5 sm:grid-cols-[2fr_1fr_auto] sm:items-end ${card}`} onSubmit={saveManager}>
+        <form className={`mt-6 grid gap-5 sm:grid-cols-[2fr_1fr_1fr_auto] sm:items-end ${card}`} onSubmit={saveManager}>
           <PortalField id="manager-name" label={editId ? "Edit name" : "New manager name"} error={errors.name}>
             <Input
               id="manager-name"
@@ -294,16 +332,33 @@ export function ManagersAdmin() {
               onChange={(e) => setForm({ ...form, name: e.target.value })}
             />
           </PortalField>
+          {editId ? (
+            <p className="text-sm leading-relaxed text-white/60">
+              Name only. Change the share from the manager&apos;s details, with a start date.
+            </p>
+          ) : (
+            <>
           <PortalField id="manager-share" label="Share of company fee (%)" error={errors.shareBps}>
-            <Input
-              id="manager-share"
-              className={portalInputClass}
-              inputMode="decimal"
-              placeholder="10"
-              value={form.percent}
-              onChange={(e) => setForm({ ...form, percent: e.target.value })}
-            />
-          </PortalField>
+              <Input
+                id="manager-share"
+                className={portalInputClass}
+                inputMode="decimal"
+                placeholder="10"
+                value={form.percent}
+                onChange={(e) => setForm({ ...form, percent: e.target.value })}
+              />
+            </PortalField>
+              <PortalField id="manager-effective" label="Share starts" error={errors.effectiveFrom}>
+                <Input
+                  id="manager-effective"
+                  type="date"
+                  className={portalInputClass}
+                  value={form.effectiveFrom}
+                  onChange={(e) => setForm({ ...form, effectiveFrom: e.target.value })}
+                />
+              </PortalField>
+            </>
+          )}
           <div className="flex gap-3">
             <Button type="submit" className={primaryButton} disabled={saving}>
               {editId ? "Save" : "Add manager"}
@@ -315,7 +370,7 @@ export function ManagersAdmin() {
                 className={secondaryButton}
                 onClick={() => {
                   setEditId(null);
-                  setForm({ name: "", percent: "" });
+                  setForm({ name: "", percent: "", effectiveFrom: todayEastern() });
                   setErrors({});
                 }}
               >
@@ -396,7 +451,7 @@ export function ManagersAdmin() {
       {detail ? (
         <section className="mt-14" aria-labelledby="detail-title">
           <h2 id="detail-title" className="text-2xl font-bold text-white">
-            {detail.manager.name}: {bpsToPercentLabel(detail.manager.shareBps)} of the company fee
+            {detail.manager.name}: {shareLabel(detail.manager.shareBps)} of the company fee
           </h2>
           <div className="mt-6 grid gap-6 lg:grid-cols-2">
             <div className={card}>
@@ -433,6 +488,52 @@ export function ManagersAdmin() {
               )}
             </div>
             <div className={card}>
+              <h3 className="font-heading text-sm tracking-[0.16em] text-gold uppercase">Share rate history</h3>
+              <table className="mt-4 w-full text-sm">
+                <thead>
+                  <tr>
+                    <th className={th}>From</th>
+                    <th className={th}>Share</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detail.manager.rates.map((rate) => (
+                    <tr key={rate.id} className="border-t border-white/10">
+                      <td className={td}>{rate.effectiveFrom}</td>
+                      <td className={td}>{bpsToPercentLabel(rate.shareBps)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <form className="mt-6 grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end" onSubmit={addRate}>
+                <PortalField id="rate-share" label="New share (%)" error={rateErrors.shareBps}>
+                  <Input
+                    id="rate-share"
+                    className={portalInputClass}
+                    inputMode="decimal"
+                    value={rateForm.percent}
+                    onChange={(e) => setRateForm({ ...rateForm, percent: e.target.value })}
+                  />
+                </PortalField>
+                <PortalField id="rate-effective" label="Starting" error={rateErrors.effectiveFrom}>
+                  <Input
+                    id="rate-effective"
+                    type="date"
+                    className={portalInputClass}
+                    value={rateForm.effectiveFrom}
+                    onChange={(e) => setRateForm({ ...rateForm, effectiveFrom: e.target.value })}
+                  />
+                </PortalField>
+                <Button type="submit" className={primaryButton} disabled={saving}>
+                  Change share
+                </Button>
+              </form>
+              <p className="mt-3 text-xs leading-relaxed text-white/55">
+                Applies from its start date forward. Trips that started earlier keep the rate they
+                earned. The date must be after the latest rate.
+              </p>
+            </div>
+            <div className={card}>
               <h3 className="font-heading text-sm tracking-[0.16em] text-gold uppercase">Assignment history</h3>
               {detail.assignments.length === 0 ? (
                 <p className="mt-4 text-white/70">No cars assigned yet.</p>
@@ -458,6 +559,38 @@ export function ManagersAdmin() {
               )}
             </div>
           </div>
+          {detail.accrual.trips.length > 0 ? (
+            <div className={`mt-6 overflow-x-auto ${card}`}>
+              <h3 className="font-heading text-sm tracking-[0.16em] text-gold uppercase">Trips</h3>
+              <table className="mt-4 w-full min-w-[560px] text-sm">
+                <thead>
+                  <tr>
+                    <th className={th}>Start</th>
+                    <th className={th}>Car</th>
+                    <th className={th}>Days</th>
+                    <th className={th}>Company fee</th>
+                    <th className={th}>Rate</th>
+                    <th className={th}>Share</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detail.accrual.trips.map((t) => {
+                    const car = cars.find((c) => c.id === t.carId);
+                    return (
+                      <tr key={`${t.assignmentId}-${t.tripId}`} className="border-t border-white/10">
+                        <td className={td}>{t.startDate}</td>
+                        <td className={td}>{car ? carLabel(car) : `Car ${t.carId}`}</td>
+                        <td className={td}>{t.days}</td>
+                        <td className={td}>{usd(t.feeCents)}</td>
+                        <td className={td}>{bpsToPercentLabel(t.shareBps)}</td>
+                        <td className={td}>{usd(t.shareCents)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
         </section>
       ) : null}
     </PortalShell>
