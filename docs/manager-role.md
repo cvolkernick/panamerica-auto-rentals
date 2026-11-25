@@ -410,7 +410,12 @@ first rate starts.
     date (start is inclusive), with a message naming the car. Moving earlier never orphans one.
   - The UPDATE repeats those guards in SQL (old date unchanged, no other rate on or before the new
     date, no assignment before it), so a race returns 409 `rates_changed` instead of a bad write.
-- Moving the first rate is a correction of when the manager started, not a re-rate: it only
-  affects trips between the old and new dates, which had no manager share before.
+- Moving the first rate is a correction of when the manager started, not a re-rate: the share
+  amount never changes. On its own it changes no earnings, because the manager's car
+  assignments still start where they were set and a trip only earns a share inside an
+  assignment. Trips between the old and new dates start earning a share only once an assignment
+  is also backdated to cover them (next bullet).
+- The admin page asks for confirmation before sending the correction, showing the old date, the
+  new date, and the unchanged share.
 - Existing car assignments still start where they were set. To backdate an open assignment,
   use "Undo last" on the car and assign again from the earlier date.

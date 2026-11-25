@@ -321,11 +321,12 @@ export function firstRateMoveError(
           (first.car_license_plate ? ` (${first.car_license_plate})` : "")
         : `Car ${first.car_id}`;
     const more = blocking.length > 1 ? ` and ${blocking.length - 1} more` : "";
+    const verb = blocking.length > 1 ? "are" : "is";
     return {
       ok: false,
       status: 400,
       fields: {
-        effectiveFrom: `${car}${more} is assigned to this manager from ${first.start_date}. Use ${first.start_date} or earlier, or change that assignment first.`,
+        effectiveFrom: `${car}${more} ${verb} assigned to this manager, starting ${first.start_date}. Use ${first.start_date} or earlier, or change ${blocking.length > 1 ? "those assignments" : "that assignment"} first.`,
       },
     };
   }

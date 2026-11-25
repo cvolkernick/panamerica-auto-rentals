@@ -87,6 +87,7 @@ export function ManagersAdmin() {
   const [rateErrors, setRateErrors] = useState<Record<string, string>>({});
   const [startFix, setStartFix] = useState("");
   const [startFixErrors, setStartFixErrors] = useState<Record<string, string>>({});
+  const [startFixConfirm, setStartFixConfirm] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [assign, setAssign] = useState<Record<number, { managerId: string; startDate: string }>>({});
@@ -142,6 +143,7 @@ export function ManagersAdmin() {
         setAccountErrors({});
         setStartFix("");
         setStartFixErrors({});
+        setStartFixConfirm(false);
       }
       setDetail(result.data);
     } else setMessage("Could not load that manager.");
@@ -238,6 +240,15 @@ export function ManagersAdmin() {
     const first = detail?.manager.rates[0];
     if (!detail || !first) return;
     if (!startFix) return setStartFixErrors({ effectiveFrom: "Pick the date this manager actually started." });
+    if (startFix === first.effectiveFrom) {
+      return setStartFixErrors({ effectiveFrom: `The first rate already starts on ${first.effectiveFrom}.` });
+    }
+    // Two steps: the first submit shows what will change; only "Confirm" sends the PATCH.
+    if (!startFixConfirm) {
+      setStartFixErrors({});
+      return setStartFixConfirm(true);
+    }
+    setStartFixConfirm(false);
     setSaving(true);
     setMessage("");
     const result = await portalRequest<Detail>(
@@ -257,7 +268,7 @@ export function ManagersAdmin() {
     setStartFix("");
     setDetail(result.data);
     setMessage(
-      `Start date corrected to ${result.data.manager.rates[0]?.effectiveFrom ?? startFix}. Cars can now be assigned to this manager from that date.`
+      `Start date corrected to ${result.data.manager.rates[0]?.effectiveFrom ?? startFix}. New car assignments can start from that date. Cars already assigned keep their current start date; to backdate one, use Undo last on that car and assign it again from the earlier date.`
     );
     setReloadToken((value) => value + 1);
   }
@@ -947,12 +958,40 @@ export function ManagersAdmin() {
                       type="date"
                       className={portalInputClass}
                       value={startFix}
-                      onChange={(e) => setStartFix(e.target.value)}
+                      onChange={(e) => {
+                        setStartFix(e.target.value);
+                        setStartFixConfirm(false);
+                      }}
                     />
                   </PortalField>
-                  <Button type="submit" variant="outline" className={secondaryButton} disabled={saving}>
-                    Correct start date
-                  </Button>
+                  {startFixConfirm ? null : (
+                    <Button type="submit" variant="outline" className={secondaryButton} disabled={saving}>
+                      Correct start date
+                    </Button>
+                  )}
+                  {startFixConfirm ? (
+                    <div className="grid gap-3 rounded border border-gold/40 p-4 text-sm sm:col-span-2" role="alertdialog" aria-live="polite">
+                      <p className="leading-relaxed text-white/80">
+                        Move {detail.manager.name}&apos;s first share rate from{" "}
+                        {detail.manager.rates[0].effectiveFrom} to {startFix}? The share stays{" "}
+                        {bpsToPercentLabel(detail.manager.rates[0].shareBps)}. Cars already assigned keep their
+                        current start date.
+                      </p>
+                      <div className="flex gap-3">
+                        <Button type="submit" className={primaryButton} disabled={saving}>
+                          Confirm
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className={secondaryButton}
+                          onClick={() => setStartFixConfirm(false)}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
                   <p className="text-xs leading-relaxed text-white/55 sm:col-span-2">
                     For when the manager actually started on a different day. Moves the first share
                     rate only; the share stays the same. It must stay before the next rate, and no car
