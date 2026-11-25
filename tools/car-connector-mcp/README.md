@@ -94,6 +94,33 @@ saved.") from the server's 403 `read_only_token`. The token never appears in the
 is written and no log row is added. Check which token a session has with `GET /whoami`
 (`tokenScope`: `full` or `read`).
 
+## Calling the API directly (without the MCP)
+
+Every request to `/api/portal/team/*` needs **two** headers. The MCP sets both for you; a direct
+call (curl, scripts, another agent's HTTP tool) must send them itself:
+
+| Header | Value |
+|--------|-------|
+| `Authorization` | `Bearer <token>`: the full team token or the read-only token |
+| `X-Agent-Name` | The calling agent's name, 1-80 characters. Percent-encode anything outside plain ASCII (e.g. `·` or emoji). The server decodes it. |
+
+The header name is matched case-insensitively (the server reads `x-agent-name`). Order of checks:
+no/wrong token → `401`; read-only token on a non-GET → `403 read_only_token`; missing or invalid
+`X-Agent-Name` → `400 {"error":"agent_name_required"}`. Every GET also needs the header, not just
+writes. It labels the write log and is never used for authorization.
+
+```sh
+# <TOKEN> is a placeholder: read it from your token file, never paste it into chat or logs.
+curl -sS https://www.panamericafleet.com/api/portal/team/whoami \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "X-Agent-Name: Helm%20%C2%B7%20Fleet%20Ops"
+# → {"agentName":"Helm · Fleet Ops","tokenScope":"read","scope":"..."}
+
+curl -sS https://www.panamericafleet.com/api/portal/team/managers/assignments \
+  -H "Authorization: Bearer $(cat ~/.config/panam-car-connector/token)" \
+  -H "X-Agent-Name: YourAgentName"
+```
+
 ## Register it
 
 ```json
