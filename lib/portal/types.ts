@@ -103,11 +103,18 @@ export type CarJson = {
   ownerEmail?: string;
 };
 
+/** Every role that applies to the signed-in account. Owner and manager can both be true. */
+export type SessionRoles = {
+  roles: { admin: boolean; owner: boolean; manager: boolean };
+  /** Set only when a managers row has account_id = this account. */
+  managerId: number | null;
+};
+
 export type SessionJson = {
   email: string;
   owner: OwnerJson;
   csrfToken: string;
-};
+} & Partial<SessionRoles>;
 
 export type PortalAuth = {
   email: string;

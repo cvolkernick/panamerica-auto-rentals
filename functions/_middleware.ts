@@ -6,7 +6,7 @@ type PagesContext = {
 };
 
 /**
- * Sends only /owner, /admin, and /api/portal from the apex host to www.
+ * Sends only /owner, /manager, /admin, and /api/portal from the apex host to www.
  * Public pages keep whatever routing they already have.
  */
 export function onRequest(context: PagesContext): Promise<Response> {

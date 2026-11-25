@@ -14,6 +14,7 @@
  * Read-only on money: nothing here changes owner statements, expenses, or payouts.
  */
 import type { PortalD1 } from "./d1";
+import { normalizeLoginEmail } from "./email";
 import { feeForTrip, type StatementTripInput } from "./statement";
 
 export const MANAGER_NAME_MAX = 80;
@@ -22,8 +23,11 @@ export const MAX_SHARE_BPS = 10000;
 export type ManagerRow = {
   id: number;
   name: string;
+  /** Login account (owners.id). Null for a phase-1 row that is not linked yet. Migration 0009. */
+  account_id: number | null;
   created_at: string;
   updated_at: string;
+  account_email?: string | null;
 };
 
 export type RateRow = {
@@ -48,7 +52,10 @@ export type AssignmentRow = {
   car_license_plate?: string;
 };
 
-export type ManagerWrite = { name: string; shareBps: number; effectiveFrom: string };
+/** New managers carry an email: the create makes a new login account for it (never links an existing one). */
+export type ManagerWrite = { name: string; email: string; shareBps: number; effectiveFrom: string };
+export type AccountWrite = { email: string };
+export type LinkWrite = { ownerId: number };
 export type ManagerPatch = { name: string };
 export type RateWrite = { shareBps: number; effectiveFrom: string };
 export type AssignmentWrite = { managerId: number | null; startDate: string };
@@ -126,17 +133,64 @@ function parseEffectiveFrom(value: unknown, fields: FieldErrors): string | undef
   return value;
 }
 
-/** Create seeds the first rate row: { name, shareBps, effectiveFrom }. */
+function parseAccountEmail(value: unknown, fields: FieldErrors): string | undefined {
+  const email = normalizeLoginEmail(value);
+  if (!email) {
+    fields.email = "Enter the manager's email. It becomes their sign-in.";
+    return;
+  }
+  return email;
+}
+
+/**
+ * Create seeds the first rate row and a new login account: { name, email, shareBps, effectiveFrom }.
+ * Name-only creates are refused (docs/manager-role.md, phase 2 prerequisite).
+ */
 export function parseManagerCreate(body: unknown): Parsed<ManagerWrite> {
   if (!isRecord(body)) return { ok: false, fields: { body: "Send a JSON object." } };
   const fields: FieldErrors = {};
   const name = parseName(body.name, fields);
+  const email = parseAccountEmail(body.email, fields);
   const shareBps = parseShareBps(body.shareBps, fields);
   const effectiveFrom = parseEffectiveFrom(body.effectiveFrom, fields);
-  if (Object.keys(fields).length > 0 || name === undefined || shareBps === undefined || effectiveFrom === undefined) {
+  if (
+    Object.keys(fields).length > 0 ||
+    name === undefined ||
+    email === undefined ||
+    shareBps === undefined ||
+    effectiveFrom === undefined
+  ) {
     return { ok: false, fields };
   }
-  return { ok: true, value: { name, shareBps, effectiveFrom } };
+  return { ok: true, value: { name, email, shareBps, effectiveFrom } };
+}
+
+/** { email } for a new login account on an unlinked manager. */
+export function parseAccountCreate(body: unknown): Parsed<AccountWrite> {
+  if (!isRecord(body)) return { ok: false, fields: { body: "Send a JSON object." } };
+  const fields: FieldErrors = {};
+  const email = parseAccountEmail(body.email, fields);
+  if (email === undefined) return { ok: false, fields };
+  return { ok: true, value: { email } };
+}
+
+/**
+ * Explicit link to an existing account: { ownerId, confirm: true }. An email is refused here on
+ * purpose, so a link can never come from an inferred email match.
+ */
+export function parseAccountLink(body: unknown): Parsed<LinkWrite> {
+  if (!isRecord(body)) return { ok: false, fields: { body: "Send a JSON object." } };
+  if ("email" in body) {
+    return { ok: false, fields: { email: "Link by the confirmed account id, not by email." } };
+  }
+  const fields: FieldErrors = {};
+  const raw = body.ownerId;
+  let ownerId: number | undefined;
+  if (typeof raw === "number" && Number.isSafeInteger(raw) && raw > 0) ownerId = raw;
+  else fields.ownerId = "Choose the account to link by its id.";
+  if (body.confirm !== true) fields.confirm = "Confirm this exact account before linking.";
+  if (Object.keys(fields).length > 0 || ownerId === undefined) return { ok: false, fields };
+  return { ok: true, value: { ownerId } };
 }
 
 /** Name only. The share changes through a dated rate (parseRateCreate), never in place. */
@@ -344,7 +398,9 @@ export function planAssignment(
 
 // ---------- store ----------
 
-const MANAGER_COLUMNS = "id, name, created_at, updated_at";
+const MANAGER_COLUMNS = "id, name, account_id, created_at, updated_at";
+const MANAGER_WITH_ACCOUNT = `SELECT m.id, m.name, m.account_id, m.created_at, m.updated_at, o.email AS account_email
+  FROM managers m LEFT JOIN owners o ON o.id = m.account_id`;
 const RATE_COLUMNS = "id, manager_id, share_bps, effective_from, created_at";
 
 /**
@@ -352,9 +408,20 @@ const RATE_COLUMNS = "id, manager_id, share_bps, effective_from, created_at";
  * manager writes never fall back to separate steps, so a failed insert can't leave a car
  * without its manager or a manager without its first rate.
  */
-async function runAll(db: PortalD1, statements: ReturnType<PortalD1["prepare"]>[]): Promise<void> {
+async function runAll(db: PortalD1, statements: ReturnType<PortalD1["prepare"]>[]): Promise<unknown[]> {
   if (typeof db.batch !== "function") throw new Error("d1_batch_required");
-  await db.batch(statements);
+  return db.batch(statements);
+}
+
+function changesOf(result: unknown): number {
+  const meta = (result as { meta?: { changes?: unknown } } | null)?.meta;
+  return Number(meta?.changes ?? 0);
+}
+
+/** True for the D1/SQLite error when migration 0009 (managers.account_id) is not applied. */
+export function isMissingAccountColumn(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /no such column:?\s*(\w+\.)?account_id/i.test(message);
 }
 
 const ASSIGNMENT_SELECT = `SELECT a.id, a.car_id, a.manager_id, a.start_date, a.end_date, a.created_at,
@@ -364,21 +431,53 @@ const ASSIGNMENT_SELECT = `SELECT a.id, a.car_id, a.manager_id, a.start_date, a.
   JOIN managers m ON m.id = a.manager_id
   JOIN cars c ON c.id = a.car_id`;
 
+/** Admin list: includes the linked account's email (admin-only JSON). */
 export async function listManagers(db: PortalD1): Promise<ManagerRow[]> {
-  const result = await db.prepare(`SELECT ${MANAGER_COLUMNS} FROM managers ORDER BY name, id`).all<ManagerRow>();
+  const result = await db.prepare(`${MANAGER_WITH_ACCOUNT} ORDER BY m.name, m.id`).all<ManagerRow>();
   return result.results;
 }
 
 export async function getManager(db: PortalD1, id: number): Promise<ManagerRow | null> {
-  return db.prepare(`SELECT ${MANAGER_COLUMNS} FROM managers WHERE id = ?`).bind(id).first<ManagerRow>();
+  return db.prepare(`${MANAGER_WITH_ACCOUNT} WHERE m.id = ?`).bind(id).first<ManagerRow>();
 }
 
-/** Manager and its first rate row, together. Returns the new manager id. */
+/** The manager role: the managers row whose account_id is this signed-in account, if any. */
+export async function getManagerByAccount(db: PortalD1, accountId: number): Promise<ManagerRow | null> {
+  return db
+    .prepare(`SELECT ${MANAGER_COLUMNS} FROM managers WHERE account_id = ?`)
+    .bind(accountId)
+    .first<ManagerRow>();
+}
+
+/**
+ * Same lookup for the sign-in paths (login, session, manager view). If 0009 is missing, failed,
+ * or rolled back, the column does not exist: that means no manager role, never a broken session.
+ * Any other error still throws.
+ */
+export async function findManagerRole(db: PortalD1, accountId: number): Promise<ManagerRow | null> {
+  try {
+    return await getManagerByAccount(db, accountId);
+  } catch (error) {
+    if (isMissingAccountColumn(error)) return null;
+    throw error;
+  }
+}
+
+/**
+ * New login account + manager + first rate, as one D1 batch. The caller has already refused an
+ * email that belongs to an existing account; if one appears in between, the owners UNIQUE index
+ * fails the batch and nothing is written. The new account is never an admin.
+ */
 export async function insertManager(db: PortalD1, write: ManagerWrite, actorId: number): Promise<number> {
   await runAll(
     db,
     [
-      db.prepare(`INSERT INTO managers (name, created_by) VALUES (?, ?)`).bind(write.name, actorId),
+      db.prepare(`INSERT INTO owners (name, email, is_admin) VALUES (?, ?, 0)`).bind(write.name, write.email),
+      db
+        .prepare(
+          `INSERT INTO managers (name, account_id, created_by) SELECT ?, id, ? FROM owners WHERE email = ?`
+        )
+        .bind(write.name, actorId, write.email),
       db
         .prepare(
           `INSERT INTO manager_share_rates (manager_id, share_bps, effective_from, created_by)
@@ -390,6 +489,65 @@ export async function insertManager(db: PortalD1, write: ManagerWrite, actorId: 
   const row = await db.prepare(`SELECT id FROM managers WHERE name = ?`).bind(write.name).first<{ id: number }>();
   if (!row) throw new Error("manager_insert_failed");
   return Number(row.id);
+}
+
+/**
+ * New login account for an unlinked manager, and the link, as one D1 batch. Never an admin.
+ * The owners INSERT only runs while this manager is still unlinked, inside the same transaction
+ * as the UPDATE, so a race cannot leave an orphan owners row. Returns false (nothing written)
+ * when the manager was linked in the meantime.
+ */
+export async function createAccountForManager(
+  db: PortalD1,
+  managerId: number,
+  name: string,
+  email: string
+): Promise<boolean> {
+  const results = await runAll(db, [
+    db
+      .prepare(
+        `INSERT INTO owners (name, email, is_admin)
+         SELECT ?, ?, 0 WHERE EXISTS (SELECT 1 FROM managers WHERE id = ? AND account_id IS NULL)`
+      )
+      .bind(name, email, managerId),
+    db
+      .prepare(
+        `UPDATE managers SET account_id = (SELECT id FROM owners WHERE email = ?),
+                updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+          WHERE id = ? AND account_id IS NULL`
+      )
+      .bind(email, managerId),
+  ]);
+  const inserted = changesOf(results[0]);
+  const linked = changesOf(results[1]);
+  if (inserted === 1 && linked === 1) return true;
+  if (inserted === 1) {
+    // Defensive: should not happen inside one transaction. Remove the unlinked new account.
+    await db
+      .prepare(
+        `DELETE FROM owners WHERE email = ? AND password_hash IS NULL
+           AND NOT EXISTS (SELECT 1 FROM managers WHERE account_id = owners.id)
+           AND NOT EXISTS (SELECT 1 FROM cars WHERE owner_id = owners.id)`
+      )
+      .bind(email)
+      .run();
+  }
+  return false;
+}
+
+/**
+ * Explicit link to an existing account the admin confirmed by id. Only an unlinked row changes.
+ * Does not touch owners (is_admin is never granted or revoked here). Returns rows changed.
+ */
+export async function linkManagerAccount(db: PortalD1, managerId: number, ownerId: number): Promise<number> {
+  const result = await db
+    .prepare(
+      `UPDATE managers SET account_id = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+        WHERE id = ? AND account_id IS NULL`
+    )
+    .bind(ownerId, managerId)
+    .run();
+  return Number(result.meta.changes ?? 0);
 }
 
 export async function updateManagerName(db: PortalD1, id: number, name: string): Promise<void> {
@@ -584,6 +742,8 @@ export function managerJson(row: ManagerRow, rates: RateRow[], today: string) {
   return {
     id: Number(row.id),
     name: row.name,
+    accountId: row.account_id == null ? null : Number(row.account_id),
+    accountEmail: row.account_email ? row.account_email.trim().toLowerCase() : null,
     shareBps: rateOn(sorted, today),
     firstEffectiveFrom: sorted[0]?.effective_from ?? null,
     nextRate: next ? rateJson(next) : null,

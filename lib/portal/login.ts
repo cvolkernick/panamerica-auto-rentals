@@ -42,6 +42,7 @@ import {
   SESSION_TTL_MS,
   sessionCookie,
 } from "./session";
+import { accountRoles } from "./roles";
 import type { PortalAuth } from "./types";
 
 /** Failed attempts for one email from one IPv4 address or IPv6 /64. Successes and 429s are not counted. */
@@ -214,10 +215,12 @@ export async function handleLogin(
     expiresAt,
     nowIso
   );
+  const ownerView = ownerJson(owner, env);
   const response = json({
     email: owner.email.trim().toLowerCase(),
-    owner: ownerJson(owner, env),
+    owner: ownerView,
     csrfToken: secrets.csrfToken,
+    ...(await accountRoles(db, ownerView)),
   });
   return applyCookies(response, [
     sessionCookie(secrets.token),

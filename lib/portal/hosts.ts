@@ -41,6 +41,8 @@ export function isPortalSurface(pathname: string): boolean {
   return (
     path === "/owner" ||
     path.startsWith("/owner/") ||
+    path === "/manager" ||
+    path.startsWith("/manager/") ||
     path === "/admin" ||
     path.startsWith("/admin/") ||
     path === "/api/portal" ||

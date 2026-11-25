@@ -121,6 +121,15 @@ export function OwnerPortal() {
       lede={
         <>
           Signed in as {gate.session.email}. This list is only for your cars.
+          {gate.session.roles?.manager ? (
+            <>
+              {" "}
+              <Link href="/manager/" className="text-gold hover:underline">
+                Open manager view
+              </Link>
+              .
+            </>
+          ) : null}
           {gate.session.owner.isAdmin ? (
             <>
               {" "}

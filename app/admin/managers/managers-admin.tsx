@@ -24,7 +24,7 @@ import {
   type ManagerAccrual,
   type ManagerJson,
 } from "@/lib/portal/managers";
-import type { CarJson, PortalErrorJson, SessionJson } from "@/lib/portal/types";
+import type { CarJson, OwnerJson, PortalErrorJson, SessionJson } from "@/lib/portal/types";
 
 const primaryButton =
   "h-11 bg-red px-6 font-heading tracking-[0.18em] text-white uppercase hover:bg-red/90";
@@ -74,7 +74,11 @@ export function ManagersAdmin() {
   const [managers, setManagers] = useState<ManagerRow[]>([]);
   const [current, setCurrent] = useState<AssignmentJson[]>([]);
   const [cars, setCars] = useState<CarJson[]>([]);
-  const [form, setForm] = useState({ name: "", percent: "", effectiveFrom: todayEastern() });
+  const [accounts, setAccounts] = useState<OwnerJson[]>([]);
+  const [form, setForm] = useState({ name: "", email: "", percent: "", effectiveFrom: todayEastern() });
+  const [accountForm, setAccountForm] = useState({ email: "", ownerId: "", confirm: false });
+  const [accountErrors, setAccountErrors] = useState<Record<string, string>>({});
+  const [inviteUrl, setInviteUrl] = useState("");
   const [rateForm, setRateForm] = useState({ percent: "", effectiveFrom: todayEastern() });
   const [rateErrors, setRateErrors] = useState<Record<string, string>>({});
   const [editId, setEditId] = useState<number | null>(null);
@@ -101,11 +105,12 @@ export function ManagersAdmin() {
         setEmail(session.data?.email ?? "");
         return setGate({ kind: "not-admin" });
       }
-      const [managerResult, carResult] = await Promise.all([
+      const [managerResult, carResult, ownerResult] = await Promise.all([
         portalRequest<{ managers: ManagerRow[]; currentAssignments: AssignmentJson[] }>(
           "/api/portal/admin/managers"
         ),
         portalRequest<{ cars: CarJson[] }>("/api/portal/admin/cars"),
+        portalRequest<{ owners: OwnerJson[] }>("/api/portal/admin/owners"),
       ]);
       if (cancelled) return;
       if (!managerResult.ok || !managerResult.data || !carResult.ok || !carResult.data) {
@@ -115,6 +120,7 @@ export function ManagersAdmin() {
       setManagers(managerResult.data.managers);
       setCurrent(managerResult.data.currentAssignments);
       setCars(carResult.data.cars);
+      setAccounts(ownerResult.ok && ownerResult.data ? ownerResult.data.owners : []);
       setGate({ kind: "ready" });
     })();
     return () => {
@@ -124,8 +130,14 @@ export function ManagersAdmin() {
 
   async function openDetail(id: number) {
     const result = await portalRequest<Detail>(`/api/portal/admin/managers/${id}`);
-    if (result.ok && result.data) setDetail(result.data);
-    else setMessage("Could not load that manager.");
+    if (result.ok && result.data) {
+      if (result.data.manager.id !== detail?.manager.id) {
+        setAccountForm({ email: "", ownerId: "", confirm: false });
+        setAccountErrors({});
+        setInviteUrl("");
+      }
+      setDetail(result.data);
+    } else setMessage("Could not load that manager.");
   }
 
   async function saveManager(event: FormEvent) {
@@ -133,6 +145,7 @@ export function ManagersAdmin() {
     const shareBps = percentToBps(form.percent);
     const next: Record<string, string> = {};
     if (!form.name.trim()) next.name = "Enter a name.";
+    if (!editId && !form.email.trim()) next.email = "Enter the manager's email. It becomes their sign-in.";
     if (!editId && shareBps === null) next.shareBps = "Enter a percent from 0 to 100, up to two decimals.";
     if (Object.keys(next).length) return setErrors(next);
     setSaving(true);
@@ -141,7 +154,10 @@ export function ManagersAdmin() {
       editId ? `/api/portal/admin/managers/${editId}` : "/api/portal/admin/managers",
       editId
         ? { method: "PATCH", body: { name: form.name } }
-        : { method: "POST", body: { name: form.name, shareBps, effectiveFrom: form.effectiveFrom } }
+        : {
+            method: "POST",
+            body: { name: form.name, email: form.email, shareBps, effectiveFrom: form.effectiveFrom },
+          }
     );
     setSaving(false);
     if (!result.ok) {
@@ -149,8 +165,12 @@ export function ManagersAdmin() {
       return setMessage("Could not save the manager.");
     }
     setErrors({});
-    setForm({ name: "", percent: "", effectiveFrom: todayEastern() });
-    setMessage(editId ? "Manager saved." : "Manager added.");
+    setForm({ name: "", email: "", percent: "", effectiveFrom: todayEastern() });
+    setMessage(
+      editId
+        ? "Manager saved."
+        : "Manager added with a new login. Open Details to make their one-time invite link."
+    );
     if (editId && detail?.manager.id === editId) await openDetail(editId);
     setEditId(null);
     setReloadToken((value) => value + 1);
@@ -177,6 +197,69 @@ export function ManagersAdmin() {
     setDetail(result.data);
     setMessage("Share change saved. It applies from its date forward; earlier trips keep their rate.");
     setReloadToken((value) => value + 1);
+  }
+
+  async function accountAction(action: "account" | "link") {
+    if (!detail) return;
+    const body =
+      action === "account"
+        ? { email: accountForm.email }
+        : { ownerId: Number(accountForm.ownerId), confirm: accountForm.confirm };
+    if (action === "link" && (!/^[1-9]\d*$/.test(accountForm.ownerId) || !accountForm.confirm)) {
+      return setAccountErrors({
+        ownerId: /^[1-9]\d*$/.test(accountForm.ownerId) ? "" : "Choose the account.",
+        confirm: accountForm.confirm ? "" : "Confirm this exact account before linking.",
+      });
+    }
+    setSaving(true);
+    setMessage("");
+    const result = await portalRequest<Detail>(`/api/portal/admin/managers/${detail.manager.id}/${action}`, {
+      method: "POST",
+      body,
+    });
+    setSaving(false);
+    if (!result.ok || !result.data) {
+      setAccountErrors(fieldsFrom(result.error));
+      const reason = result.error?.reason;
+      return setMessage(
+        reason === "email_has_account"
+          ? "That email already has a portal account. It was not linked. To use it, link that account by its id and confirm."
+          : reason === "account_has_manager"
+            ? "That account is already linked to another manager."
+            : reason === "manager_already_linked"
+              ? "This manager already has a login."
+              : "Could not set up the login."
+      );
+    }
+    setAccountErrors({});
+    setAccountForm({ email: "", ownerId: "", confirm: false });
+    setDetail(result.data);
+    setMessage(action === "account" ? "Login created. Make an invite link next." : "Account linked.");
+    setReloadToken((v) => v + 1);
+  }
+
+  async function makeInvite() {
+    if (!detail) return;
+    setSaving(true);
+    setMessage("");
+    setInviteUrl("");
+    const result = await portalRequest<{ url: string; expiresAt: string }>(
+      `/api/portal/admin/managers/${detail.manager.id}/invite`,
+      { method: "POST" }
+    );
+    setSaving(false);
+    if (!result.ok || !result.data) {
+      const reason = result.error?.reason;
+      return setMessage(
+        reason === "account_has_password"
+          ? "This account already has a password. They sign in as usual and open /manager/."
+          : reason === "manager_not_linked"
+            ? "Set up a login first."
+            : "Could not make an invite link."
+      );
+    }
+    setInviteUrl(result.data.url);
+    setMessage("Invite link made. It works once and expires in 72 hours. Send it to the manager directly.");
   }
 
   function assignFor(carId: number) {
@@ -270,6 +353,7 @@ export function ManagersAdmin() {
               <thead>
                 <tr>
                   <th className={th}>Name</th>
+                  <th className={th}>Login</th>
                   <th className={th}>Share</th>
                   <th className={th}>Current cars</th>
                   <th className={th}>Trips</th>
@@ -282,6 +366,7 @@ export function ManagersAdmin() {
                 {managers.map((m) => (
                   <tr key={m.id} className="border-t border-white/10">
                     <td className={td}>{m.name}</td>
+                    <td className={`${td} wrap-anywhere`}>{m.accountEmail ?? "Not linked"}</td>
                     <td className={td}>
                       {shareLabel(m.shareBps)}
                       {m.nextRate ? (
@@ -308,7 +393,7 @@ export function ManagersAdmin() {
                         className="text-gold hover:underline"
                         onClick={() => {
                           setEditId(m.id);
-                          setForm({ name: m.name, percent: "", effectiveFrom: todayEastern() });
+                          setForm({ name: m.name, email: "", percent: "", effectiveFrom: todayEastern() });
                           setErrors({});
                         }}
                       >
@@ -322,7 +407,7 @@ export function ManagersAdmin() {
           )}
         </div>
 
-        <form className={`mt-6 grid gap-5 sm:grid-cols-[2fr_1fr_1fr_auto] sm:items-end ${card}`} onSubmit={saveManager}>
+        <form className={`mt-6 grid gap-5 sm:grid-cols-[2fr_2fr_1fr_1fr_auto] sm:items-end ${card}`} onSubmit={saveManager}>
           <PortalField id="manager-name" label={editId ? "Edit name" : "New manager name"} error={errors.name}>
             <Input
               id="manager-name"
@@ -338,6 +423,17 @@ export function ManagersAdmin() {
             </p>
           ) : (
             <>
+              <PortalField id="manager-email" label="Sign-in email" error={errors.email}>
+                <Input
+                  id="manager-email"
+                  type="email"
+                  autoComplete="off"
+                  className={portalInputClass}
+                  value={form.email}
+                  maxLength={254}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                />
+              </PortalField>
           <PortalField id="manager-share" label="Share of company fee (%)" error={errors.shareBps}>
               <Input
                 id="manager-share"
@@ -370,7 +466,7 @@ export function ManagersAdmin() {
                 className={secondaryButton}
                 onClick={() => {
                   setEditId(null);
-                  setForm({ name: "", percent: "", effectiveFrom: todayEastern() });
+                  setForm({ name: "", email: "", percent: "", effectiveFrom: todayEastern() });
                   setErrors({});
                 }}
               >
@@ -453,6 +549,106 @@ export function ManagersAdmin() {
           <h2 id="detail-title" className="text-2xl font-bold text-white">
             {detail.manager.name}: {shareLabel(detail.manager.shareBps)} of the company fee
           </h2>
+          <div className={`mt-6 ${card}`}>
+            <h3 className="font-heading text-sm tracking-[0.16em] text-gold uppercase">Login</h3>
+            {detail.manager.accountId !== null ? (
+              <div className="mt-4 grid gap-4">
+                <p className="text-sm leading-relaxed text-white/80">
+                  Signs in as <span className="wrap-anywhere text-white">{detail.manager.accountEmail}</span> at
+                  /manager/. The manager view is read-only and shows only this manager&apos;s cars, for the dates they
+                  managed them.
+                </p>
+                <div>
+                  <Button type="button" variant="outline" className={secondaryButton} disabled={saving} onClick={makeInvite}>
+                    Make invite link
+                  </Button>
+                </div>
+                {inviteUrl ? (
+                  <Input readOnly aria-label="Invite link" className={portalInputClass} value={inviteUrl} onFocus={(e) => e.currentTarget.select()} />
+                ) : null}
+              </div>
+            ) : (
+              <div className="mt-4 grid gap-6 lg:grid-cols-2">
+                <form
+                  className="grid gap-4"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void accountAction("account");
+                  }}
+                >
+                  <p className="text-sm leading-relaxed text-white/70">
+                    New login: enter an email that has no portal account yet.
+                  </p>
+                  <PortalField id="account-email" label="Sign-in email" error={accountErrors.email}>
+                    <Input
+                      id="account-email"
+                      type="email"
+                      autoComplete="off"
+                      className={portalInputClass}
+                      value={accountForm.email}
+                      onChange={(e) => setAccountForm({ ...accountForm, email: e.target.value })}
+                    />
+                  </PortalField>
+                  <div>
+                    <Button type="submit" className={primaryButton} disabled={saving}>
+                      Create login
+                    </Button>
+                  </div>
+                </form>
+                <form
+                  className="grid gap-4"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void accountAction("link");
+                  }}
+                >
+                  <p className="text-sm leading-relaxed text-white/70">
+                    Existing account (for example, an owner who also manages): choose that exact account and
+                    confirm it. An email match never links an account.
+                  </p>
+                  <PortalField id="account-owner-id" label="Account" error={accountErrors.ownerId}>
+                    <select
+                      id="account-owner-id"
+                      className={selectClass}
+                      value={accountForm.ownerId}
+                      onChange={(e) => setAccountForm({ ...accountForm, ownerId: e.target.value, confirm: false })}
+                    >
+                      <option value="">Choose an account</option>
+                      {accounts
+                        .filter((a) => !managers.some((m) => m.accountId === a.id))
+                        .map((a) => (
+                          <option key={a.id} value={String(a.id)}>
+                            {a.name} · {a.email} (#{a.id})
+                          </option>
+                        ))}
+                    </select>
+                  </PortalField>
+                  <label className="flex items-start gap-3 text-sm text-white/80">
+                    <input
+                      type="checkbox"
+                      disabled={!accountForm.ownerId}
+                      checked={accountForm.confirm}
+                      onChange={(e) => setAccountForm({ ...accountForm, confirm: e.target.checked })}
+                    />
+                    <span>
+                      {(() => {
+                        const chosen = accounts.find((a) => String(a.id) === accountForm.ownerId);
+                        return chosen
+                          ? `I confirm ${chosen.name} (${chosen.email}, #${chosen.id}) is this manager.`
+                          : "Choose an account, then confirm it.";
+                      })()}
+                    </span>
+                  </label>
+                  {accountErrors.confirm ? <p className="text-sm text-white/80">{accountErrors.confirm}</p> : null}
+                  <div>
+                    <Button type="submit" variant="outline" className={secondaryButton} disabled={saving}>
+                      Link account
+                    </Button>
+                  </div>
+                </form>
+              </div>
+            )}
+          </div>
           <div className="mt-6 grid gap-6 lg:grid-cols-2">
             <div className={card}>
               <h3 className="font-heading text-sm tracking-[0.16em] text-gold uppercase">Accrued share by month</h3>

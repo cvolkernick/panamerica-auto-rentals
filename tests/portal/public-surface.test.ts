@@ -53,6 +53,7 @@ test("sitemap source stays on the public paths", () => {
   assert.doesNotMatch(sitemap, /\/plans/);
   assert.doesNotMatch(sitemap, /\/owner/);
   assert.doesNotMatch(sitemap, /\/admin/);
+  assert.doesNotMatch(sitemap, /\/manager/);
 });
 
 test("robots disallows the portal and still allows the public site", () => {
@@ -60,6 +61,7 @@ test("robots disallows the portal and still allows the public site", () => {
   assert.match(robots, /allow:\s*"\/"/);
   assert.match(robots, /\/owner\//);
   assert.match(robots, /\/admin\//);
+  assert.match(robots, /\/manager\//);
   assert.match(robots, /\/api\//);
 });
 
@@ -68,6 +70,7 @@ test("header and footer do not link the portal", () => {
     const text = source(path);
     assert.doesNotMatch(text, /\/owner/);
     assert.doesNotMatch(text, /\/admin/);
+    assert.doesNotMatch(text, /\/manager\//);
   }
 });
 
@@ -91,6 +94,8 @@ test("portal pages ask robots not to index", () => {
     "app/owner/invite/page.tsx",
     "app/admin/statement/page.tsx",
     "app/owner/statement/page.tsx",
+    "app/manager/page.tsx",
+    "app/manager/invite/page.tsx",
   ]) {
     assert.match(source(path), /noindex/);
   }
@@ -101,7 +106,9 @@ test("the invite page is noindex and stays out of the sitemap", () => {
   assert.doesNotMatch(source("app/sitemap.ts"), /invite/);
   assert.match(source("app/robots.ts"), /\/owner\//);
   const routes = JSON.parse(source("public/_routes.json")) as FunctionRoutes;
-  for (const path of ["/owner/invite/", "/owner/invite/index.html", "/api/portal/invite"]) {
+  assert.match(source("app/manager/invite/page.tsx"), /noindex/);
+  assert.match(source("app/manager/invite/page.tsx"), /InvitePortal/);
+  for (const path of ["/owner/invite/", "/owner/invite/index.html", "/manager/invite/", "/manager/invite/index.html", "/api/portal/invite"]) {
     assert.equal(functionsInvokedFor(path, routes), true, path);
   }
 });
@@ -145,7 +152,7 @@ test("old plans URLs redirect exactly and stay outside Functions", () => {
 
 test("functions are not invoked for public routes", () => {
   const routes = JSON.parse(source("public/_routes.json")) as FunctionRoutes;
-  assert.deepEqual(routes.include, ["/owner", "/owner/*", "/admin", "/admin/*", "/api/portal/*"]);
+  assert.deepEqual(routes.include, ["/owner", "/owner/*", "/manager", "/manager/*", "/admin", "/admin/*", "/api/portal/*"]);
   assert.deepEqual(routes.exclude, ["/admin/cars/*", "/admin/imports/*"]);
   assert.equal(functionsInvokedFor("/admin/cars/ABC1234", routes), false);
   assert.equal(functionsInvokedFor("/admin/cars/ABC1234/", routes), false);
@@ -155,7 +162,7 @@ test("functions are not invoked for public routes", () => {
   for (const path of ["/", "/fleet", "/fleet/", "/plans", "/plans/", "/management", "/management/", "/about", "/contact/", "/sitemap.xml", "/robots.txt"]) {
     assert.equal(functionsInvokedFor(path, routes), false, path);
   }
-  for (const path of ["/owner", "/owner/", "/admin/", "/admin/index.html", "/api/portal/login", "/api/portal/logout", "/api/portal/session"]) {
+  for (const path of ["/owner", "/owner/", "/manager", "/manager/", "/admin/", "/admin/index.html", "/api/portal/login", "/api/portal/logout", "/api/portal/session", "/api/portal/manager"]) {
     assert.equal(functionsInvokedFor(path, routes), true, path);
   }
   assert.equal(existsSync("functions/_middleware.ts"), true);
