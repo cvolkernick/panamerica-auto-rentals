@@ -8,6 +8,7 @@
  *   PATCH /api/portal/admin/managers/:id              { name } (share changes go through rates)
  *   GET   /api/portal/admin/managers/:id/rates        dated share history
  *   POST  /api/portal/admin/managers/:id/rates        { shareBps, effectiveFrom } forward only
+ *   PATCH /api/portal/admin/managers/:id/rates/:rateId { effectiveFrom } correct the FIRST rate's start date only
  *   POST  /api/portal/admin/managers/:id/account      { email } new login account for an unlinked manager
  *   POST  /api/portal/admin/managers/:id/link         { ownerId, confirm: true } explicit link to an existing account
  *   POST  /api/portal/admin/managers/:id/invite       one-time invite for the linked account (/manager/invite/);
@@ -26,6 +27,9 @@ import {
   closeAssignment,
   createAccountForManager,
   deleteAssignment,
+  firstRateMoveError,
+  moveFirstRate,
+  parseFirstRateMove,
   getManagerByAccount,
   linkManagerAccount,
   parseAccountCreate,
@@ -286,6 +290,27 @@ export async function routeAdminManagers(
     return methodNotAllowed("GET, PATCH");
   }
 
+  const rateMatch = path.match(/^\/api\/portal\/admin\/managers\/([1-9]\d*)\/rates\/([1-9]\d*)$/);
+  if (rateMatch) {
+    const id = parsePathId(rateMatch[1]);
+    const rateId = parsePathId(rateMatch[2]);
+    if (id === null || rateId === null) return notFound();
+    const existing = await getManager(db, id);
+    if (!existing) return notFound();
+    if (method !== "PATCH") return methodNotAllowed("PATCH");
+    const body = await readJson(request);
+    if (!body.ok) return body.response;
+    const parsed = parseFirstRateMove(body.value);
+    if (!parsed.ok) return validationError(parsed.fields);
+    const [rates, assignments] = await Promise.all([listRates(db, id), listAssignmentsForManager(db, id)]);
+    const check = firstRateMoveError(rates, assignments, rateId, parsed.value.effectiveFrom);
+    if (!check.ok) return check.status === 404 ? notFound() : validationError(check.fields);
+    const changed = await moveFirstRate(db, id, rateId, check.from, parsed.value.effectiveFrom);
+    // Something changed between the check and the write (a rate or an assignment): ask to reload.
+    if (changed !== 1) return json({ error: "conflict", reason: "rates_changed" }, 409);
+    return json(await managerDetail(db, existing));
+  }
+
   const ratesMatch = path.match(/^\/api\/portal\/admin\/managers\/([1-9]\d*)\/rates$/);
   if (ratesMatch) {
     const id = parsePathId(ratesMatch[1]);
@@ -358,7 +383,7 @@ export async function routeAdminManagers(
         if (!first || parsed.value.startDate < first.effective_from) {
           return validationError({
             startDate: first
-              ? `Use ${first.effective_from} or later, when this manager's first share rate starts.`
+              ? `Use ${first.effective_from} or later, when this manager's first share rate starts. If they started earlier, correct their start date on the managers page first.`
               : "This manager has no share rate yet.",
           });
         }
