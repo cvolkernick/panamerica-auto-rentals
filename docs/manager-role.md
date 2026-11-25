@@ -158,7 +158,11 @@ Before apply:
 - A later migration may make `account_id` NOT NULL only once every existing
   row is linked. That is not part of 0009.
 - Rollback of the 0009 additive step is drop the index and the column. Do not
-  drop `managers` or the other phase-1 tables.
+  drop `managers` or the other phase-1 tables. Rolling back 0009 alone, with the
+  phase 2 code left deployed, is safe: login and `GET /api/portal/session` treat a
+  missing `account_id` as no manager role and keep returning 200. Only the admin
+  managers page and the manager view stop working until 0009 is re-applied, and
+  any links made since the apply are lost (re-link them, or restore the backup).
 
 ### What a manager can and cannot see
 
@@ -269,7 +273,14 @@ not consumed. Both invite pages send it.
   with `{ confirm: true }` sets `owners.owner_role = 1` (migration 0010). Use it when a
   manager-only account buys a car. Adding a car with that account as owner also makes it
   an owner, since owning a car is part of the rule. Before 0010 is applied the route
-  returns 409 `migration_pending` and every read ignores the flag.
+  returns 409 `migration_pending` and every read ignores the flag. The grant route refuses
+  a body with an `email` field (400, `fields.email`), even with `confirm: true`: the account
+  comes only from the admin's explicit pick.
+- **Owners-list invite on a dual-role account (#38):** `POST /api/portal/admin/owners/:id/invite`
+  for an account that is also a manager and already has a password returns 409
+  `account_has_password` unless the body is `{ "reset": true }` (the Owners list asks first;
+  once used, the link replaces their password). Same rule as the managers invite route. A
+  plain owner, or a dual-role account with no password yet, gets a link as before.
 - `GET /api/portal/admin/owners` adds `roles: { owner, manager }` per account. The
   admin owners list shows accounts with the owner role; the "Existing account" picker
   lists the ones without it. Creating a new owner with an email that already has a login
@@ -341,8 +352,11 @@ rollback is `DROP TABLE car_manager_assignments; DROP TABLE manager_share_rates;
 Phase 2: `migrations/0009_manager_accounts.sql`, only after Grok's go, never from a deploy step.
 The code tolerates a missing `managers.account_id` (no manager role, sessions keep working), so
 the code ships first:
-1. Merge and deploy the phase 2 code.
-2. Check `/workspace/state/holds.json`.
+1. Check `/workspace/state/holds.json` (stop if an active hold covers Panamerica), then
+   merge and deploy the phase 2 code.
+2. Hold manager-admin writes until step 6 is done: stay off the admin managers page and
+   its routes (they need `account_id` and fail until 0009 is applied), and apply 0009
+   right after the deploy so that window stays short.
 3. Fresh backup outside the repo, mode 600:
    `npx wrangler d1 export panamerica-portal --remote --output=<backup dir>/pre-0009.sql`.
 4. Time Travel bookmark: `npx wrangler d1 time-travel info panamerica-portal` and record it.
@@ -353,3 +367,27 @@ the code ships first:
 
 Rollback: `DROP INDEX idx_managers_account_id; ALTER TABLE managers DROP COLUMN account_id;`
 (or restore the Time Travel bookmark). Never drop `managers` or the other phase-1 tables.
+Rolling back 0009 alone is safe without reverting the code: sessions and login keep working
+with no manager role; only manager-admin and the manager view are down until it is re-applied.
+
+Phase 3: `migrations/0010_owner_role.sql` (nullable `owners.owner_role`, for adding the owner
+role to an existing account). Only after Grok's go, never from a deploy step. The code reads the
+column defensively, so it works before and after 0010; before it, the grant route answers 409
+`migration_pending` and every read ignores the flag. Apply schema-first:
+1. Check `/workspace/state/holds.json` (stop if an active hold covers Panamerica).
+2. Fresh backup outside the repo, mode 600:
+   `npx wrangler d1 export panamerica-portal --remote --output=<backup dir>/<timestamp>.sql`.
+3. Time Travel bookmark: `npx wrangler d1 time-travel info panamerica-portal` and record it.
+4. Read-only pre-check: `npx wrangler d1 execute panamerica-portal --remote --command="SELECT COUNT(*) AS n FROM pragma_table_info('owners') WHERE name = 'owner_role'"`.
+   Stop if `n` is 1.
+5. Apply only 0010 by hand: `npx wrangler d1 execute panamerica-portal --remote --file=migrations/0010_owner_role.sql`,
+   then re-run the pre-check and expect `n` = 1 (no rows change: `owner_role` stays NULL everywhere).
+6. Merge and deploy the code, then unauth smoke: `/api/portal/session` and admin API routes 401
+   (no 500s); `/admin/` and `/admin/managers/` 200.
+
+Applied 2026-11-24 ~11:37 PM ET (with #37): backup taken, Time Travel bookmark recorded, pre-check 0,
+post-check 1.
+
+Rollback: `ALTER TABLE owners DROP COLUMN owner_role;` (or restore the Time Travel bookmark).
+Safe without reverting the code: reads fall back to the derived rule (owns a car, or not a
+manager), and any owner role granted since the apply is lost (grant it again, or add the car).
