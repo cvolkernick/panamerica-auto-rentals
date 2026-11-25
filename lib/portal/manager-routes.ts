@@ -3,13 +3,15 @@
  *
  *   GET   /api/portal/admin/managers                  list + current cars + accrued share
  *   POST  /api/portal/admin/managers                  { name, email, shareBps, effectiveFrom } (new account + first rate)
+ *                                                     or { name, ownerId, confirm: true, shareBps, effectiveFrom } (existing account)
  *   GET   /api/portal/admin/managers/:id              manager, rate history, assignment history, accrual
  *   PATCH /api/portal/admin/managers/:id              { name } (share changes go through rates)
  *   GET   /api/portal/admin/managers/:id/rates        dated share history
  *   POST  /api/portal/admin/managers/:id/rates        { shareBps, effectiveFrom } forward only
  *   POST  /api/portal/admin/managers/:id/account      { email } new login account for an unlinked manager
  *   POST  /api/portal/admin/managers/:id/link         { ownerId, confirm: true } explicit link to an existing account
- *   POST  /api/portal/admin/managers/:id/invite       one-time invite for the linked account (/manager/invite/)
+ *   POST  /api/portal/admin/managers/:id/invite       one-time invite for the linked account (/manager/invite/);
+ *                                                     { reset: true } required if the account already has a password
  *   GET   /api/portal/admin/cars/:id/managers         car's manager history (newest first)
  *   POST  /api/portal/admin/cars/:id/managers         { managerId | null, startDate }
  *   POST  /api/portal/admin/cars/:id/managers/undo    undo the last assignment change
@@ -42,6 +44,8 @@ import {
   managerJson,
   parseAssignment,
   parseManagerCreate,
+  parseManagerFromAccount,
+  insertManagerForAccount,
   parseManagerPatch,
   parseRateCreate,
   planAssignment,
@@ -71,6 +75,18 @@ function parsePathId(raw: string): number | null {
 function duplicateName(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return /UNIQUE/i.test(message) && /managers\.name|name/i.test(message);
+}
+
+/** Body is optional on the invite route: empty or invalid JSON reads as no options. */
+async function readOptionalJson(request: Request): Promise<Record<string, unknown> | null> {
+  const text = await request.text().catch(() => "");
+  if (!text.trim() || text.length > 10_000) return null;
+  try {
+    const value = JSON.parse(text) as unknown;
+    return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
 }
 
 function accountConflict(): Response {
@@ -116,6 +132,29 @@ async function carManagers(db: PortalD1, carId: number) {
   };
 }
 
+/** New manager on an existing account the admin picked and confirmed (dual role). */
+async function createManagerForAccount(db: PortalD1, value: unknown, actorId: number): Promise<Response> {
+  const parsed = parseManagerFromAccount(value);
+  if (!parsed.ok) return validationError(parsed.fields);
+  if (!(await getOwnerById(db, parsed.value.ownerId))) return validationError({ ownerId: "Account not found." });
+  if (await getManagerByAccount(db, parsed.value.ownerId)) {
+    return json({ error: "conflict", reason: "account_has_manager" }, 409);
+  }
+  try {
+    const id = await insertManagerForAccount(db, parsed.value, actorId);
+    const row = await getManager(db, id);
+    if (!row) return json({ error: "server_error" }, 500);
+    return json({ manager: managerJson(row, await listRates(db, id), todayEastern()) }, 201);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (duplicateName(error) && !/account_id/i.test(message)) {
+      return json({ error: "conflict", fields: { name: "A manager with this name already exists." } }, 409);
+    }
+    if (/UNIQUE/i.test(message)) return json({ error: "conflict", reason: "account_has_manager" }, 409);
+    throw error;
+  }
+}
+
 export async function routeAdminManagers(
   request: Request,
   db: PortalD1,
@@ -152,6 +191,9 @@ export async function routeAdminManagers(
     if (method === "POST") {
       const body = await readJson(request);
       if (!body.ok) return body.response;
+      const fromAccount =
+        typeof body.value === "object" && body.value !== null && "ownerId" in (body.value as Record<string, unknown>);
+      if (fromAccount) return createManagerForAccount(db, body.value, actorId);
       const parsed = parseManagerCreate(body.value);
       if (!parsed.ok) return validationError(parsed.fields);
       // Email match must never auto-link an existing account (docs/manager-role.md).
@@ -183,9 +225,12 @@ export async function routeAdminManagers(
     if (action === "invite") {
       if (existing.account_id == null) return json({ error: "conflict", reason: "manager_not_linked" }, 409);
       const accountId = Number(existing.account_id);
-      // An explicitly linked account that already has a password signs in as it does today.
+      // An account that already has a password signs in as it does today. Like the owner
+      // invite, an admin may still issue a new link (it replaces the password once used), but
+      // only with an explicit { reset: true }, so a linked owner's password is never reset by accident.
       if (await getPasswordHash(db, accountId)) {
-        return json({ error: "conflict", reason: "account_has_password" }, 409);
+        const reset = await readOptionalJson(request);
+        if (reset?.reset !== true) return json({ error: "conflict", reason: "account_has_password" }, 409);
       }
       return createOwnerInvite(db, accountId, new Date(), MANAGER_INVITE_URL_PREFIX);
     }
@@ -215,7 +260,7 @@ export async function routeAdminManagers(
       try {
         const changed = await linkManagerAccount(db, id, parsed.value.ownerId);
         if (changed !== 1) return json({ error: "conflict", reason: "manager_already_linked" }, 409);
-      } catch (error) {
+          } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         if (/UNIQUE/i.test(message)) return json({ error: "conflict", reason: "account_has_manager" }, 409);
         throw error;
