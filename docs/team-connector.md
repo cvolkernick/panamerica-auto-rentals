@@ -13,6 +13,13 @@ Server side of the car connector MCP (`tools/car-connector-mcp`). See that READM
   `PORTAL_TEAM_TOKEN` set to be enabled at all. `/whoami` reports `tokenScope`
   (`full` or `read`) and the matching `scope` list.
 - `X-Agent-Name` is self-asserted: a label for the write log, never an authorization input.
+- **`X-Agent-Name` is required on every request, GETs included.** Missing, empty, over 80
+  chars or containing control characters → `400 {"error":"agent_name_required"}`. This check runs after
+  the token check (401) and the read-only check (403). The server reads `x-agent-name`
+  (case-insensitive) and percent-decodes it, so send non-ASCII names percent-encoded, e.g.
+  `X-Agent-Name: Helm%20%C2%B7%20Fleet%20Ops`. Direct-call example (placeholder token):
+  `curl -H "Authorization: Bearer <TOKEN>" -H "X-Agent-Name: YourAgentName" https://www.panamericafleet.com/api/portal/team/whoami`.
+  More in `tools/car-connector-mcp/README.md` ("Calling the API directly").
 - Every write and its `team_write_log` row (migration 0007: agent name, action, car id,
   entity id, before/after JSON) run in one D1 batch, so a write never lands unlogged.
   Car JSON (reads and log) carries `ownerId` only: no owner name or email.
