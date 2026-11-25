@@ -11,6 +11,8 @@
 -- Stop if that returns 1. Apply with wrangler d1 execute, never from a deploy step.
 -- Rollback: DROP INDEX idx_managers_account_id; ALTER TABLE managers DROP COLUMN account_id;
 -- (never drop managers or the other phase-1 tables).
+-- Rolling back 0009 alone is safe without reverting the code: sessions and login keep working
+-- with no manager role; only manager-admin and the manager view are down until it is re-applied.
 
 PRAGMA foreign_keys = ON;
 
