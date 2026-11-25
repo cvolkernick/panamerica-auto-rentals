@@ -85,6 +85,8 @@ export function ManagersAdmin() {
   const [pick, setPick] = useState({ ownerId: "", confirm: false });
   const [rateForm, setRateForm] = useState({ percent: "", effectiveFrom: todayEastern() });
   const [rateErrors, setRateErrors] = useState<Record<string, string>>({});
+  const [startFix, setStartFix] = useState("");
+  const [startFixErrors, setStartFixErrors] = useState<Record<string, string>>({});
   const [editId, setEditId] = useState<number | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [assign, setAssign] = useState<Record<number, { managerId: string; startDate: string }>>({});
@@ -138,6 +140,8 @@ export function ManagersAdmin() {
       if (result.data.manager.id !== detail?.manager.id) {
         setAccountForm({ email: "", ownerId: "", confirm: false });
         setAccountErrors({});
+        setStartFix("");
+        setStartFixErrors({});
       }
       setDetail(result.data);
     } else setMessage("Could not load that manager.");
@@ -226,6 +230,35 @@ export function ManagersAdmin() {
     setRateForm({ percent: "", effectiveFrom: todayEastern() });
     setDetail(result.data);
     setMessage("Share change saved. It applies from its date forward; earlier trips keep their rate.");
+    setReloadToken((value) => value + 1);
+  }
+
+  async function correctFirstStart(event: FormEvent) {
+    event.preventDefault();
+    const first = detail?.manager.rates[0];
+    if (!detail || !first) return;
+    if (!startFix) return setStartFixErrors({ effectiveFrom: "Pick the date this manager actually started." });
+    setSaving(true);
+    setMessage("");
+    const result = await portalRequest<Detail>(
+      `/api/portal/admin/managers/${detail.manager.id}/rates/${first.id}`,
+      { method: "PATCH", body: { effectiveFrom: startFix } }
+    );
+    setSaving(false);
+    if (!result.ok || !result.data) {
+      setStartFixErrors(
+        result.error?.reason === "rates_changed"
+          ? { effectiveFrom: "This manager's rates or cars just changed. Reload and try again." }
+          : fieldsFrom(result.error)
+      );
+      return setMessage("Could not correct the start date.");
+    }
+    setStartFixErrors({});
+    setStartFix("");
+    setDetail(result.data);
+    setMessage(
+      `Start date corrected to ${result.data.manager.rates[0]?.effectiveFrom ?? startFix}. Cars can now be assigned to this manager from that date.`
+    );
     setReloadToken((value) => value + 1);
   }
 
@@ -599,7 +632,7 @@ export function ManagersAdmin() {
                 onChange={(e) => setForm({ ...form, percent: e.target.value })}
               />
             </PortalField>
-              <PortalField id="manager-effective" label="Share starts" error={errors.effectiveFrom}>
+              <PortalField id="manager-effective" label="Share starts (can be a past date)" error={errors.effectiveFrom}>
                 <Input
                   id="manager-effective"
                   type="date"
@@ -899,6 +932,34 @@ export function ManagersAdmin() {
                 Applies from its start date forward. Trips that started earlier keep the rate they
                 earned. The date must be after the latest rate.
               </p>
+              {detail.manager.rates.length > 0 ? (
+                <form
+                  className="mt-6 grid gap-4 border-t border-white/10 pt-6 sm:grid-cols-[1fr_auto] sm:items-end"
+                  onSubmit={correctFirstStart}
+                >
+                  <PortalField
+                    id="first-rate-start"
+                    label={`Correct start date (now ${detail.manager.rates[0].effectiveFrom})`}
+                    error={startFixErrors.effectiveFrom}
+                  >
+                    <Input
+                      id="first-rate-start"
+                      type="date"
+                      className={portalInputClass}
+                      value={startFix}
+                      onChange={(e) => setStartFix(e.target.value)}
+                    />
+                  </PortalField>
+                  <Button type="submit" variant="outline" className={secondaryButton} disabled={saving}>
+                    Correct start date
+                  </Button>
+                  <p className="text-xs leading-relaxed text-white/55 sm:col-span-2">
+                    For when the manager actually started on a different day. Moves the first share
+                    rate only; the share stays the same. It must stay before the next rate, and no car
+                    can be assigned to them before it.
+                  </p>
+                </form>
+              ) : null}
             </div>
             <div className={card}>
               <h3 className="font-heading text-sm tracking-[0.16em] text-gold uppercase">Assignment history</h3>

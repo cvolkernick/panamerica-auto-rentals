@@ -5,6 +5,8 @@
  *   The share has a dated history (manager_share_rates). A change applies forward only from
  *   its effective date; each trip uses the rate in effect on the trip's start date, so past
  *   accrual is never re-rated. Rates are append-only and must be dated after the latest one.
+ *   The one correction allowed: the FIRST rate's start date can move (when the manager actually
+ *   started), as long as it stays before the next rate and no assignment starts before it.
  * - An admin assigns cars to managers. Each car has at most one manager at a time, and the
  *   assignment history is kept with start (inclusive) and end (exclusive) dates.
  * - A manager's accrued share is figured per trip: the trip's management fee (the tier fee on
@@ -254,6 +256,80 @@ export function rateWriteError(rates: { effective_from: string }[], write: RateW
     };
   }
   return null;
+}
+
+/**
+ * Correcting the FIRST rate's start date: { effectiveFrom } only. This fixes when a manager
+ * actually started (for example added late, took over earlier). It is not a share change:
+ * the share stays the same, later rates stay forward only, and only the first rate can move.
+ */
+export function parseFirstRateMove(body: unknown): Parsed<{ effectiveFrom: string }> {
+  if (!isRecord(body)) return { ok: false, fields: { body: "Send a JSON object." } };
+  if ("shareBps" in body) {
+    return { ok: false, fields: { shareBps: "Only the start date can be corrected. Change the share with a new dated rate." } };
+  }
+  const fields: FieldErrors = {};
+  const effectiveFrom = parseEffectiveFrom(body.effectiveFrom, fields);
+  if (effectiveFrom === undefined) return { ok: false, fields };
+  return { ok: true, value: { effectiveFrom } };
+}
+
+export type FirstRateMoveCheck =
+  | { ok: true; from: string; nextFrom: string | null }
+  | { ok: false; status: 404 }
+  | { ok: false; status: 400; fields: FieldErrors };
+
+/**
+ * Pure. The rate must be the manager's first (earliest) rate. The new date must stay before
+ * the next rate, and no car assignment may start before it, so every day a manager has a car
+ * still has a share rate in effect. Moving earlier never orphans an assignment.
+ */
+export function firstRateMoveError(
+  rates: { id: number; effective_from: string }[],
+  assignments: { car_id: number; start_date: string; car_year?: number; car_make?: string; car_model?: string; car_license_plate?: string }[],
+  rateId: number,
+  effectiveFrom: string
+): FirstRateMoveCheck {
+  const sorted = [...rates].sort((a, b) =>
+    a.effective_from === b.effective_from ? Number(a.id) - Number(b.id) : a.effective_from < b.effective_from ? -1 : 1
+  );
+  const index = sorted.findIndex((rate) => Number(rate.id) === rateId);
+  if (index < 0) return { ok: false, status: 404 };
+  if (index !== 0) {
+    return {
+      ok: false,
+      status: 400,
+      fields: {
+        effectiveFrom: "Only the first share rate's start date can be corrected. Later share changes apply forward only.",
+      },
+    };
+  }
+  const from = sorted[0].effective_from;
+  const nextFrom = sorted[1]?.effective_from ?? null;
+  if (effectiveFrom === from) return { ok: false, status: 400, fields: { effectiveFrom: `The first rate already starts on ${from}.` } };
+  if (nextFrom && effectiveFrom >= nextFrom) {
+    return { ok: false, status: 400, fields: { effectiveFrom: `Use a date before ${nextFrom}, when the next rate starts.` } };
+  }
+  const blocking = assignments
+    .filter((row) => row.start_date < effectiveFrom)
+    .sort((a, b) => (a.start_date < b.start_date ? -1 : a.start_date > b.start_date ? 1 : 0));
+  if (blocking.length > 0) {
+    const first = blocking[0];
+    const car =
+      first.car_make !== undefined
+        ? `${first.car_year} ${first.car_make} ${first.car_model ?? ""}`.trim() +
+          (first.car_license_plate ? ` (${first.car_license_plate})` : "")
+        : `Car ${first.car_id}`;
+    const more = blocking.length > 1 ? ` and ${blocking.length - 1} more` : "";
+    return {
+      ok: false,
+      status: 400,
+      fields: {
+        effectiveFrom: `${car}${more} is assigned to this manager from ${first.start_date}. Use ${first.start_date} or earlier, or change that assignment first.`,
+      },
+    };
+  }
+  return { ok: true, from, nextFrom };
 }
 
 /** The rate in effect on a date: the latest rate whose effective_from is on or before it. */
@@ -630,6 +706,34 @@ export async function insertRate(db: PortalD1, managerId: number, write: RateWri
     .bind(managerId, write.shareBps, write.effectiveFrom, actorId)
     .run();
   return Number(result.meta.last_row_id);
+}
+
+/**
+ * Moves the first rate's effective_from, guarded in SQL so a race can't break the rules checked
+ * in firstRateMoveError: the row must still have its old date, no other rate may start on or
+ * before the new date, and no assignment of this manager may start before it. Returns changes (1 or 0).
+ */
+export async function moveFirstRate(
+  db: PortalD1,
+  managerId: number,
+  rateId: number,
+  from: string,
+  to: string
+): Promise<number> {
+  const result = await db
+    .prepare(
+      `UPDATE manager_share_rates SET effective_from = ?
+        WHERE id = ? AND manager_id = ? AND effective_from = ?
+          AND NOT EXISTS (
+            SELECT 1 FROM manager_share_rates r WHERE r.manager_id = ? AND r.id <> ? AND r.effective_from <= ?
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM car_manager_assignments a WHERE a.manager_id = ? AND a.start_date < ?
+          )`
+    )
+    .bind(to, rateId, managerId, from, managerId, rateId, to, managerId, to)
+    .run();
+  return Number(result.meta.changes ?? 0);
 }
 
 /** Close the open assignment and open the next one together (reassign). */

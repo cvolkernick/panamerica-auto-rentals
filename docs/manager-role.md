@@ -38,6 +38,7 @@ login account and adds the read-only manager view.
 | POST | `/api/portal/admin/managers` | `{ name, email, shareBps, effectiveFrom }` (new login account + first rate; phase 2) |
 | GET / PATCH | `/api/portal/admin/managers/:id` | `{ name }` (shareBps is refused) |
 | GET / POST | `/api/portal/admin/managers/:id/rates` | `{ shareBps, effectiveFrom }`, after the latest rate |
+| PATCH | `/api/portal/admin/managers/:id/rates/:rateId` | `{ effectiveFrom }` — corrects the **first** rate's start date only (see below) |
 | GET / POST | `/api/portal/admin/cars/:id/managers` | `{ managerId \| null, startDate }` |
 | POST | `/api/portal/admin/cars/:id/managers/undo` | |
 
@@ -391,3 +392,25 @@ post-check 1.
 Rollback: `ALTER TABLE owners DROP COLUMN owner_role;` (or restore the Time Travel bookmark).
 Safe without reverting the code: reads fall back to the derived rule (owns a car, or not a
 manager), and any owner role granted since the apply is lost (grant it again, or add the car).
+
+## Correcting a manager's start date (Chris t1749u, 11/25)
+
+A manager added late (for example Ariel, added 11/25 but managing since 11/1) needs her first
+share rate to start on the real date, because a car can't be assigned to a manager before her
+first rate starts.
+
+- **When adding:** "Share starts" on the add form (new login or existing account) already takes
+  any real date, including past dates. It defaults to today.
+- **Later:** the manager's details panel has "Correct start date", which calls
+  `PATCH /api/portal/admin/managers/:id/rates/:rateId` with `{ effectiveFrom }`.
+  - Only the manager's first (earliest) rate can move. Any other rate returns 400: later share
+    changes stay forward only. A `shareBps` field is refused; the share itself never changes here.
+  - The new date must be before the next rate, if there is one.
+  - Moving later is blocked while any of the manager's car assignments starts before the new
+    date (start is inclusive), with a message naming the car. Moving earlier never orphans one.
+  - The UPDATE repeats those guards in SQL (old date unchanged, no other rate on or before the new
+    date, no assignment before it), so a race returns 409 `rates_changed` instead of a bad write.
+- Moving the first rate is a correction of when the manager started, not a re-rate: it only
+  affects trips between the old and new dates, which had no manager share before.
+- Existing car assignments still start where they were set. To backdate an open assignment,
+  use "Undo last" on the car and assign again from the earlier date.
