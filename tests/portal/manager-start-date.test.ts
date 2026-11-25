@@ -69,10 +69,10 @@ describe("first share rate start date: pure rules", () => {
     );
     assert.equal(check.ok, false);
     const message = !check.ok && check.status === 400 ? check.fields.effectiveFrom : "";
-    assert.match(message, /Car 3 and 1 more is assigned to this manager from 2026-11-01/);
-    assert.match(message, /Use 2026-11-01 or earlier/);
+    assert.match(message, /Car 3 and 1 more are assigned to this manager, starting 2026-11-01/);
+    assert.match(message, /Use 2026-11-01 or earlier, or change those assignments first\./);
     const named = firstRateMoveError([{ id: 7, effective_from: "2026-11-01" }], [{ car_id: 2, start_date: "2026-11-05", car_year: 2014, car_make: "Kia", car_model: "Soul", car_license_plate: "ABC123" }], 7, "2026-11-10");
-    assert.match(!named.ok && named.status === 400 ? named.fields.effectiveFrom : "", /^2014 Kia Soul \(ABC123\) is assigned/);
+    assert.match(!named.ok && named.status === 400 ? named.fields.effectiveFrom : "", /^2014 Kia Soul \(ABC123\) is assigned to this manager, starting 2026-11-05\. Use 2026-11-05 or earlier, or change that assignment first\./);
     // On the assignment's own start date is fine (start is inclusive).
     assert.equal(firstRateMoveError([{ id: 7, effective_from: "2026-11-01" }], [{ car_id: 3, start_date: "2026-11-05" }], 7, "2026-11-05").ok, true);
   });
@@ -119,7 +119,7 @@ describe("first share rate start date: routes", () => {
     // Moving it back later past car B's 11/1 assignment is blocked, and nothing changes.
     const later = await call(env, "PATCH", `/api/portal/admin/managers/${manager.id}/rates/${rateId}`, { effectiveFrom: "2026-11-10" });
     assert.equal(later.status, 400);
-    assert.match(JSON.stringify(later.data), /assigned to this manager from 2026-11-01/);
+    assert.match(JSON.stringify(later.data), /is assigned to this manager, starting 2026-11-01/);
     const after = (await call(env, "GET", `/api/portal/admin/managers/${manager.id}/rates`)).data?.rates as Rate[];
     assert.deepEqual(after.map((r) => r.effectiveFrom), ["2026-11-01"]);
   });
