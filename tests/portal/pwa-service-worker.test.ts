@@ -78,6 +78,9 @@ test("sw never handles the signed-in portals or invite pages", () => {
     "/admin/cars/ABC123/",
     "/owner",
     "/admin",
+    "/sign-in",
+    "/sign-in/",
+    "/sign-in/?x=1",
   ]) {
     assert.equal(handled(path), false, path);
   }
@@ -98,6 +101,9 @@ test("sw handles public navigations and hashed build assets only", () => {
 test("sw cache is versioned and old panam caches are cleaned on activate", () => {
   const sw = readFileSync("public/sw.js", "utf8");
   assert.match(sw, /const VERSION = "v\d+";/);
+  // v3 added /sign-in to the bypass list; bump again whenever the list changes.
+  assert.match(sw, /const VERSION = "v3";/);
+  assert.match(sw, /const BYPASS_PREFIXES = \["\/api", "\/owner", "\/manager", "\/admin", "\/sign-in"\];/);
   assert.match(sw, /key\.startsWith\(CACHE_PREFIX\) && key !== PAGES && key !== ASSETS/);
   assert.match(sw, /self\.clients\.claim\(\)/);
 });

@@ -46,7 +46,7 @@ test("pages link the manifest, theme colour and apple web-app tags", () => {
     assert.match(html, /rel="apple-touch-icon"/, page);
   }
   // Portal pages keep noindex; the offline page is noindex too.
-  for (const page of ["owner/index.html", "manager/index.html", "admin/index.html", "offline/index.html"]) {
+  for (const page of ["owner/index.html", "manager/index.html", "admin/index.html", "sign-in/index.html", "offline/index.html"]) {
     assert.match(readFileSync(join(OUT, page), "utf8"), /<meta name="robots" content="noindex"/, page);
   }
 });
