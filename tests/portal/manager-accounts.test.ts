@@ -14,7 +14,7 @@ import { handlePortal } from "../../lib/portal/handler";
 import { isPortalSurface, portalApexRedirect } from "../../lib/portal/hosts";
 import { sealDerived } from "../../lib/portal/mac";
 import { clipWindows, inWindows, windowMonths } from "../../lib/portal/manager-view";
-import { parseAccountLink } from "../../lib/portal/managers";
+import { isMissingAccountColumn, parseAccountLink } from "../../lib/portal/managers";
 import { SESSION_COOKIE } from "../../lib/portal/session";
 import { createMemoryD1, loadMigrationSql } from "./memory-d1";
 import { call, DEALER, devEnv, PANAMERICA, requireDb } from "./support";
@@ -269,6 +269,29 @@ describe("admin creates and links manager accounts", () => {
     const again = await call(env, "POST", `/api/portal/admin/managers/${id}/account`, { email: "lee2@example.com" });
     assert.equal(again.status, 409);
     assert.equal(again.data?.reason, "manager_already_linked");
+  });
+
+  test("/account race: if the manager is linked in between, no orphan owners row is left and the reply is 409", async () => {
+    const env = devEnv(PANAMERICA);
+    await sql(env, `INSERT INTO managers (name, created_by) VALUES ('Legacy Lee', 1)`);
+    const dealer = await addOwner(env, OWNER_NAME, DEALER);
+    const db = requireDb(env);
+    // Simulate a concurrent explicit link landing just before this create's batch runs.
+    const racing: PortalEnv = {
+      ...env,
+      DB: {
+        prepare: (query: string) => db.prepare(query),
+        async batch(statements) {
+          await db.prepare(`UPDATE managers SET account_id = ? WHERE id = 1`).bind(dealer).run();
+          return db.batch!(statements);
+        },
+      },
+    };
+    const res = await call(racing, "POST", `/api/portal/admin/managers/1/account`, { email: "lee@example.com" });
+    assert.equal(res.status, 409, res.text);
+    assert.equal(res.data?.reason, "manager_already_linked");
+    assert.equal(await first(env, `SELECT id FROM owners WHERE email = 'lee@example.com'`), null);
+    assert.equal(Number((await first<{ account_id: number }>(env, `SELECT account_id FROM managers WHERE id = 1`))?.account_id), dealer);
   });
 
   test("linking an existing account requires that exact owner id and an explicit confirm", async () => {
@@ -764,6 +787,70 @@ describe("manager view authz", () => {
       assert.deepEqual(session.data?.roles, roles, email);
       assert.equal(session.data?.managerId, managerId, email);
     }
+  });
+});
+
+/** A database as if 0009 was never applied, or was rolled back. */
+async function preAccountsDb() {
+  const db = createMemoryD1();
+  await db.prepare(`DROP INDEX idx_managers_account_id`).bind().run();
+  await db.prepare(`ALTER TABLE managers DROP COLUMN account_id`).bind().run();
+  return db;
+}
+
+describe("sessions survive a missing 0009 (deploy order safety)", () => {
+  test("pre-0009 schema: login and /session return 200 with roles.manager false; manager API is 403, not 500", async () => {
+    const db = await preAccountsDb();
+    const real: PortalEnv = { DB: db, PORTAL_PEPPER: pepper };
+    const derived = encodeDerived(await derivePortalKey(PANAMERICA, password));
+    await db
+      .prepare(`UPDATE owners SET password_hash = ? WHERE id = 1`)
+      .bind(await sealDerived(pepper, await derivePortalKey(PANAMERICA, password)))
+      .run();
+    await db.prepare(`INSERT INTO managers (name, created_by) VALUES ('Legacy Lee', 1)`).bind().run();
+
+    const login = await send(real, "POST", "/api/portal/login", { body: { email: PANAMERICA, derived } });
+    assert.equal(login.status, 200, login.text);
+    assert.deepEqual(login.data?.roles, { admin: true, owner: true, manager: false });
+    assert.equal(login.data?.managerId, null);
+    const cookie = login.setCookie.find((c) => c.startsWith(`${SESSION_COOKIE}=`))?.split(";")[0];
+    assert.ok(cookie);
+
+    const session = await send(real, "GET", "/api/portal/session", { cookie });
+    assert.equal(session.status, 200, session.text);
+    assert.deepEqual(session.data?.roles, { admin: true, owner: true, manager: false });
+    assert.equal((await send(real, "GET", "/api/portal/cars", { cookie })).status, 200);
+    const manager = await send(real, "GET", "/api/portal/manager", { cookie });
+    assert.equal(manager.status, 403);
+    assert.equal(manager.data?.reason, "not_manager");
+
+    // Dev-auth session (owner without cars) as well.
+    await db.prepare(`INSERT INTO owners (name, email, is_admin) VALUES ('Dealer', ?, 0)`).bind(DEALER).run();
+    const dealer = await call({ DB: db, PORTAL_DEV_AUTH: "1", PORTAL_DEV_EMAIL: DEALER }, "GET", "/api/portal/session");
+    assert.equal(dealer.status, 200);
+    assert.deepEqual(dealer.data?.roles, { admin: false, owner: true, manager: false });
+  });
+
+  test("only the missing account_id column is tolerated; any other error still fails", async () => {
+    assert.equal(isMissingAccountColumn(new Error("D1_ERROR: no such column: account_id: SQLITE_ERROR")), true);
+    assert.equal(isMissingAccountColumn(new Error("no such column: m.account_id")), true);
+    assert.equal(isMissingAccountColumn(new Error("no such column: name")), false);
+    assert.equal(isMissingAccountColumn(new Error("no such table: managers")), false);
+    assert.equal(isMissingAccountColumn(new Error("D1_ERROR: network")), false);
+
+    const db = createMemoryD1();
+    const broken: PortalEnv = {
+      PORTAL_DEV_AUTH: "1",
+      PORTAL_DEV_EMAIL: PANAMERICA,
+      DB: {
+        batch: db.batch?.bind(db),
+        prepare(query: string) {
+          if (/FROM managers WHERE account_id/.test(query)) throw new Error("D1_ERROR: database is locked");
+          return db.prepare(query);
+        },
+      },
+    };
+    assert.equal((await call(broken, "GET", "/api/portal/session")).status, 500);
   });
 });
 

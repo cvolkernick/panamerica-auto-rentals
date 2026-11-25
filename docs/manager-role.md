@@ -319,14 +319,18 @@ Phase 1: `npx wrangler d1 execute panamerica-portal --remote --file=migrations/0
 after a fresh `d1 export` backup. Additive only (three new tables, no change to existing ones);
 rollback is `DROP TABLE car_manager_assignments; DROP TABLE manager_share_rates; DROP TABLE managers;`.
 
-Phase 2: `migrations/0009_manager_accounts.sql`, only after Grok's go, never from a deploy step:
-1. Fresh backup: `npx wrangler d1 export panamerica-portal --remote --output=<backup dir>/pre-0009.sql`
-   (outside the repo, chmod 600).
-2. Time Travel bookmark: `npx wrangler d1 time-travel info panamerica-portal` and record it.
-3. Read-only pre-check: `npx wrangler d1 execute panamerica-portal --remote --command="SELECT COUNT(*) AS n FROM pragma_table_info('managers') WHERE name = 'account_id'"`.
+Phase 2: `migrations/0009_manager_accounts.sql`, only after Grok's go, never from a deploy step.
+The code tolerates a missing `managers.account_id` (no manager role, sessions keep working), so
+the code ships first:
+1. Merge and deploy the phase 2 code.
+2. Check `/workspace/state/holds.json`.
+3. Fresh backup outside the repo, mode 600:
+   `npx wrangler d1 export panamerica-portal --remote --output=<backup dir>/pre-0009.sql`.
+4. Time Travel bookmark: `npx wrangler d1 time-travel info panamerica-portal` and record it.
+5. Read-only pre-check: `npx wrangler d1 execute panamerica-portal --remote --command="SELECT COUNT(*) AS n FROM pragma_table_info('managers') WHERE name = 'account_id'"`.
    Stop if `n` is 1.
-4. Apply only 0009: `npx wrangler d1 execute panamerica-portal --remote --file=migrations/0009_manager_accounts.sql`.
-5. Deploy the code after the column exists (the new code reads `account_id`).
+6. Apply only 0009 by hand: `npx wrangler d1 execute panamerica-portal --remote --file=migrations/0009_manager_accounts.sql`.
+7. Check login and `GET /api/portal/session`, then a linked manager reading `/api/portal/manager`.
 
 Rollback: `DROP INDEX idx_managers_account_id; ALTER TABLE managers DROP COLUMN account_id;`
 (or restore the Time Travel bookmark). Never drop `managers` or the other phase-1 tables.
