@@ -214,7 +214,8 @@ export const fleetVehicles: readonly FleetVehicle[] = [
     partner: null,
     listed: true,
     links: {
-      direct: { wheelbaseRentalId: "570552", enabled: false },
+      // 2026-11-25 Wheelbase listing 570552 published (Chris ask via Grok); Book Direct on
+      direct: { wheelbaseRentalId: "570552", enabled: true },
       turo: "https://turo.com/us/en/suv-rental/united-states/cape-coral-fl/rivian/r1s/3881079",
     },
   },
