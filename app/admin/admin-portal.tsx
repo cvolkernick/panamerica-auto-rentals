@@ -197,7 +197,20 @@ export function AdminPortal() {
 
   async function createInvite(id: number) {
     setMessage("");
-    const result = await inviteLinks.create(id, `/api/portal/admin/owners/${id}/invite`);
+    const path = `/api/portal/admin/owners/${id}/invite`;
+    let result = await inviteLinks.create(id, path);
+    if (!result.ok && result.error?.reason === "account_has_password") {
+      // Also a manager with a password set: a new link would replace it, so ask first.
+      if (
+        !window.confirm(
+          "This login is also a manager and already has a password. Make a new invite link anyway? Once used, it replaces their current password."
+        )
+      ) {
+        setMessage("No link made. They sign in as usual.");
+        return;
+      }
+      result = await inviteLinks.create(id, path, { reset: true });
+    }
     if (!result.ok || !result.data?.url) setMessage("Could not create an invite link.");
   }
 
