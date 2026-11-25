@@ -48,6 +48,13 @@ should be able to sign in with their account and have the manager role. Today a 
 a flat name value on `managers`, not an account. This section is the prerequisite for
 phase 2 sign-in and scoped car access. This PR is docs only: no migration and no code.
 
+Phase 2 is **read-only except auth**. After sign-in, manager APIs and `/manager/` only
+read assigned-car income, expenses, earnings, statements, and assignment or rate
+history, each limited to that manager's assignment date windows. The only writes in
+phase 2 are auth: login, logout, session, CSRF, and invite password setup. Managers
+do not create or edit trips, expenses, assignments, rates, payouts, or reimbursements
+in this phase. Reimbursement claims are phase 3; approval stays admin-only.
+
 ### Why a link on `managers`, not a new users table
 
 There is no general `users` table. Portal login accounts are rows in `owners`: unique
@@ -87,23 +94,25 @@ Reuse the existing owner invite flow. Do not add a second password scheme, and d
 passwords, hashes, or invite tokens in this repo or in docs.
 
 1. Admin creates a manager with name, **email**, share, and effective date. If that
-   email is new, one D1 batch inserts the `owners` row (`is_admin = 0`), the
-   `managers` row (name + `account_id`), and the first share rate. If that email
-   already belongs to an owner account, the batch links `account_id` to that
-   existing row and inserts the `managers` row and first rate (no second login).
-   If that account already has a `managers` row, the create is refused (`account_id`
-   is unique).
+   email is new (no `owners` row), one D1 batch inserts the `owners` row
+   (`is_admin = 0`), the `managers` row (name + `account_id`), and the first share
+   rate. If that email already belongs to an owner account, the create is refused.
+   **Email match must never auto-link an existing owner.** To attach a manager row
+   to an existing account, the admin must explicitly confirm the specific
+   `owner_id` (a separate link action that takes that id, not an inferred email
+   match). If that `owner_id` already has a `managers` row, the link is refused
+   (`account_id` is unique).
 2. Admin sends a one-time invite, either through the existing
    `POST /api/portal/admin/owners/:id/invite` or a thin wrapper
    `POST /api/portal/admin/managers/:id/invite` that calls the same `createOwnerInvite`
    helper. The token is stored as SHA-256 only, 72-hour TTL, older unused invites marked
    used, same as owners. Skip the invite when the account already has a password
-   (linking an existing owner); they can sign in as they do today and use `/manager/`
-   once the row is linked.
-3. When an invite is needed, the manager opens the invite link (`/owner/invite/`
-   today, or a `/manager/invite/` shell that hits the same `GET`/`POST
-   /api/portal/invite`) and sets a password in the browser (Argon2id, as documented
-   in `docs/owner-portal.md`). The Worker stores only the peppered HMAC.
+   (an explicitly linked existing owner); they can sign in as they do today and use
+   `/manager/` once the row is linked.
+3. When an invite is needed, the manager opens `/manager/invite/` (a shell that
+   hits the same `GET`/`POST /api/portal/invite`) and sets a password in the
+   browser (Argon2id, as documented in `docs/owner-portal.md`). The Worker stores
+   only the peppered HMAC.
 4. The manager signs in with the same `POST /api/portal/login`. Sessions, CSRF,
    device cookie, and rate limits are unchanged. After login, the client routes
    from the session roles: `/manager/` for the manager view, `/owner/` for the
@@ -113,31 +122,45 @@ passwords, hashes, or invite tokens in this repo or in docs.
 how managers are onboarded, and it should stay unset in production.
 
 Until a manager row has an `account_id` and the account can authenticate (invite
-completed, or an already-passworded owner account), that manager cannot sign in
-with the manager role.
+completed, or an already-passworded owner account that was explicitly linked),
+that manager cannot sign in with the manager role.
 
 ### Migration plan for existing manager rows (forward only)
 
 Additive migration after 0008 (for example `0009_manager_accounts.sql`), applied later
-with `wrangler d1 execute` after a D1 export backup, not as part of this docs PR and not
+with `wrangler d1 execute` after the checks below, not as part of this docs PR and not
 from a deploy step.
 
-- Add nullable `managers.account_id` and the partial unique index.
-- Do not invent emails in SQL. Phase 1 rows have only a name. An admin links each
-  existing manager by supplying an email (creates an `owners` row, or links an
-  existing one, sets `account_id`, then invites if the account has no password).
-  Assignments, rates, and accrued share do not change.
-- New manager creates require an email and an account in the same batch; name-only
-  creates are refused going forward.
-- After every existing row is linked, a later migration may make `account_id` NOT NULL
-  (open question below).
-- Rollback of the additive step is drop the index and the column. Do not drop
-  `managers` or the other phase-1 tables.
+Before apply:
+
+- Take a fresh `d1 export` backup.
+- Take a D1 Time Travel bookmark.
+- Run a read-only pre-apply check that `managers.account_id` does not already
+  exist. If the column is already there, stop and do not apply.
+
+0009 itself:
+
+- Add nullable `managers.account_id` and the partial unique index. 0009 does
+  **not** make `account_id` NOT NULL.
+- Do not invent emails in SQL. Phase 1 rows have only a name. An admin links
+  each existing manager by supplying an email. If the email is new, create an
+  `owners` row, set `account_id`, then invite. If the email already belongs to
+  an owner, do not link until the admin explicitly confirms that specific
+  `owner_id`. Assignments, rates, and accrued share do not change.
+- New manager creates require an email and an account in the same batch when
+  the email is new; name-only creates are refused going forward. Linking to an
+  existing owner is always the explicit `owner_id` confirmation path, never an
+  automatic email match.
+- A later migration may make `account_id` NOT NULL only once every existing
+  row is linked. That is not part of 0009.
+- Rollback of the 0009 additive step is drop the index and the column. Do not
+  drop `managers` or the other phase-1 tables.
 
 ### What a manager can and cannot see
 
 This is the authz contract phase 2 must implement once accounts exist. The portal does
-not store guest PII, and that stays a hard rule.
+not store guest PII, and that stays a hard rule. Phase 2 access is read-only except
+auth, as stated above.
 
 **Can (scoped to this manager, on `/manager/` and manager APIs):**
 
@@ -173,7 +196,8 @@ not store guest PII, and that stays a hard rule.
 - Guest data of any kind. Expense notes that look like an email or phone number stay
   rejected.
 - Other managers' accrual, share rates, or assignments.
-- Changing share rates, assignments, owners, or cars.
+- Changing share rates, assignments, owners, or cars, or any other non-auth write
+  in phase 2.
 - Approving reimbursements, expenses, or payouts (admin-only, including when this
   account is also an owner). Bank details and payout execution stay out of the
   manager view. Submitting a reimbursement claim is phase 3; approval is still
@@ -196,12 +220,22 @@ not store guest PII, and that stays a hard rule.
 - After a reassignment closes their open row, income and expense reads for
   dates inside the closed window still succeed; dates on or after `end_date`
   do not.
+- Date-scoped earnings, statements, and log rows, including a month that
+  straddles `end_date`: rows on or after `end_date` are omitted; rows inside
+  the window are present.
+- Manager JSON (list, car, statement, log) never includes owner name or email.
+- Invite tokens that are already used, expired, or issued for a different
+  account all fail the same way and do not authenticate or set a password.
+- A dual-role account that is not `is_admin` gets 403 on approval and payout
+  routes.
+- Phase 2 manager routes reject non-auth writes (trips, expenses, assignments,
+  rates, reimbursements).
 - Session JSON reports the manager role only when `account_id` matches, and can
   report owner and manager together.
 - Linking a manager row does not grant or revoke `is_admin`.
-- Creating a manager with an email that already has a `managers` row is refused.
-  Creating a manager with an email that already belongs to an owner who is not
-  yet a manager links that account.
+- Creating a manager with an email that already belongs to an owner does not
+  link that account. Linking requires an explicit confirmed `owner_id`. Creating
+  or linking when that `owner_id` already has a `managers` row is refused.
 - An unlinked phase-1 manager row still cannot authenticate.
 
 ## Later phases (not built)
@@ -209,7 +243,8 @@ not store guest PII, and that stays a hard rule.
 - Phase 2 (depends on the account link above): manager sign-in; managers see
   income, expenses, and earnings for the date ranges they were the active
   manager, under the authz contract in this document. Owner and manager views
-  stay separate when one account has both roles.
+  stay separate when one account has both roles. Phase 2 is read-only except
+  auth.
 - Phase 3: reimbursement claims (manager-submitted, admin approve or reject, never auto-posted to
   the owner statement; an admin may create a separate linked owner expense), and recorded
   payouts to managers (share payouts and reimbursements) with payout history and a
@@ -228,10 +263,10 @@ not store guest PII, and that stays a hard rule.
    stay separate, each scoped to its own data. A manager may manage their own car.
    Approvals of reimbursements, expenses, and payouts are admin-only, so both roles on
    one account create no approval conflict.
-5. Open: reuse `/owner/invite/` for manager password setup, or add a `/manager/invite/`
-   shell that calls the same invite API?
-6. Open: once every existing manager row is linked, should a follow-up migration make
-   `account_id` NOT NULL?
+5. Resolved (Grok, 11/24 gate on #34): use a `/manager/invite/` page that calls the same
+   `GET`/`POST /api/portal/invite` API.
+6. Resolved (Grok, 11/24 gate on #34): `account_id` stays nullable in 0009. A later
+   migration may make it NOT NULL only once every existing row is linked, not in 0009.
 7. Resolved (Chris, 8:52 PM ET 11/24, t1733u): after a car is reassigned, the old
    manager sees that car's data only for the date ranges they were the active manager
    (`car_manager_assignments`, start inclusive, end exclusive), including earnings for
@@ -243,5 +278,6 @@ after a fresh `d1 export` backup. Additive only (three new tables, no change to 
 rollback is `DROP TABLE car_manager_assignments; DROP TABLE manager_share_rates; DROP TABLE managers;`.
 
 The account-link migration is specified in the phase 2 prerequisite above. It is not in this
-PR. Apply it only with a later implementation PR, after a fresh export backup, and never
-from a deploy step.
+PR. Apply it only with a later implementation PR, after a fresh export backup, a D1 Time
+Travel bookmark, and a read-only check that `managers.account_id` does not already exist,
+and never from a deploy step.
