@@ -18,7 +18,7 @@ export type ConnectorTool = {
 export const CONNECTOR_DOC = {
   title: "Team connector (MCP)",
   updated: "2026-11-25",
-  version: "FE-4 + manager lookup",
+  version: "FE-4 + manager lookup + read-only token",
 } as const;
 
 /** Per-entry ceiling for expenses and income, in cents. Must equal MAX_ENTRY_CENTS in team-store.ts. */
@@ -127,6 +127,7 @@ export const CONNECTOR_RULES: readonly string[] = [
   "The fee is taken per trip on the platform's net payout: 20% under 7 days, 15% for 7 to 21 days, 10% over 21 days.",
   "Each car is self-contained. Nothing moves between cars.",
   "Access needs the team service token. Requests are rate limited.",
+  "A read-only team token can use the read tools only. Write tools answer with a read-only error and nothing is saved or logged.",
 ];
 
 /** JSON body for GET /api/portal/admin/connector-capabilities (admin session only). */

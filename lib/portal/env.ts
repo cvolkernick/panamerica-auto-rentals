@@ -12,4 +12,10 @@ export type PortalEnv = {
   PORTAL_PEPPER?: string;
   /** Team connector service token (Bearer). Unset or shorter than 32 chars disables /api/portal/team. */
   PORTAL_TEAM_TOKEN?: string;
+  /**
+   * Optional read-only team token (Bearer). Authorizes GET routes under /api/portal/team only;
+   * any other method gets 403 read_only_token. Unset, empty or shorter than 32 chars never matches.
+   * The team API stays disabled unless PORTAL_TEAM_TOKEN is set.
+   */
+  PORTAL_TEAM_READ_TOKEN?: string;
 };

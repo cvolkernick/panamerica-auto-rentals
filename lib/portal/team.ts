@@ -19,6 +19,12 @@
  *
  * X-Agent-Name is self-asserted by the caller. It is a label for the write log only;
  * nothing is authorized on it. The token is the only credential.
+ *
+ * Two tokens:
+ * - PORTAL_TEAM_TOKEN (full): everything above. Required; unset or short disables the API (404).
+ * - PORTAL_TEAM_READ_TOKEN (read, optional): GET routes only. Any other method answers
+ *   403 {"error":"read_only_token"} before touching D1 or the write log. Unset, empty or
+ *   short never matches, so a blank Bearer can never pass as the read token.
  */
 import { carJson, getCarById, listAllCars, uniqueField, type CarRow } from "./db";
 import type { PortalD1 } from "./d1";
@@ -144,18 +150,45 @@ export function resetTeamRateLimit(): void {
   rateWindows.clear();
 }
 
-async function authorize(request: Request, env: PortalEnv): Promise<{ agent: string } | Response> {
+export type TeamScope = "full" | "read";
+
+export const TEAM_SCOPES: Record<TeamScope, string> = {
+  full: "cars:read,cars:write,expenses:write,income:write,statements:read,managers:read",
+  read: "cars:read,expenses:read,income:read,statements:read,managers:read,write_log:read",
+};
+
+/** Read-only token callers may use GET only. */
+export function readTokenAllows(method: string): boolean {
+  return method.toUpperCase() === "GET";
+}
+
+async function authorize(request: Request, env: PortalEnv): Promise<{ agent: string; scope: TeamScope } | Response> {
   const expected = env.PORTAL_TEAM_TOKEN?.trim() ?? "";
   if (expected.length < MIN_TEAM_TOKEN_LENGTH) return notFound();
+  const readExpected = env.PORTAL_TEAM_READ_TOKEN?.trim() ?? "";
+  const readEnabled = readExpected.length >= MIN_TEAM_TOKEN_LENGTH;
   const window = rateWindow(clientIp(request), Date.now());
   if (window.failures >= TEAM_RATE_LIMIT.maxAuthFailures) return rateLimited();
   window.requests += 1;
   if (window.requests > TEAM_RATE_LIMIT.maxRequests) return rateLimited();
   const header = request.headers.get("authorization") ?? "";
   const match = /^Bearer ([A-Za-z0-9._~+/=-]{1,512})$/.exec(header.trim());
-  if (!match || !(await secretsEqual(match[1], expected))) {
+  let scope: TeamScope | null = null;
+  if (match) {
+    // Always run both compares so timing does not reveal which token (if any) matched.
+    const [isFull, isRead] = await Promise.all([
+      secretsEqual(match[1], expected),
+      secretsEqual(match[1], readEnabled ? readExpected : expected),
+    ]);
+    if (isFull) scope = "full";
+    else if (readEnabled && isRead) scope = "read";
+  }
+  if (!scope) {
     window.failures += 1;
     return unauthorized("team_token");
+  }
+  if (scope === "read" && !readTokenAllows(request.method)) {
+    return json({ error: "read_only_token", reason: "This token is read-only. Only GET is allowed." }, 403);
   }
   const agent = parseAgentName(request.headers.get(AGENT_HEADER));
   if (!agent) {
@@ -167,7 +200,7 @@ async function authorize(request: Request, env: PortalEnv): Promise<{ agent: str
       400
     );
   }
-  return { agent };
+  return { agent, scope };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -334,7 +367,7 @@ export async function handleTeam(request: Request, env: PortalEnv, db: PortalD1,
 
   if (rest === "/whoami") {
     if (method !== "GET") return methodNotAllowed("GET");
-    return json({ agentName: agent, scope: "cars:read,cars:write,expenses:write,income:write,statements:read,managers:read" });
+    return json({ agentName: agent, tokenScope: auth.scope, scope: TEAM_SCOPES[auth.scope] });
   }
 
   if (rest === "/write-log") {
