@@ -362,3 +362,25 @@ Rollback: `DROP INDEX idx_managers_account_id; ALTER TABLE managers DROP COLUMN 
 (or restore the Time Travel bookmark). Never drop `managers` or the other phase-1 tables.
 Rolling back 0009 alone is safe without reverting the code: sessions and login keep working
 with no manager role; only manager-admin and the manager view are down until it is re-applied.
+
+Phase 3: `migrations/0010_owner_role.sql` (nullable `owners.owner_role`, for adding the owner
+role to an existing account). Only after Grok's go, never from a deploy step. The code reads the
+column defensively, so it works before and after 0010; before it, the grant route answers 409
+`migration_pending` and every read ignores the flag. Apply schema-first:
+1. Check `/workspace/state/holds.json` (stop if an active hold covers Panamerica).
+2. Fresh backup outside the repo, mode 600:
+   `npx wrangler d1 export panamerica-portal --remote --output=<backup dir>/<timestamp>.sql`.
+3. Time Travel bookmark: `npx wrangler d1 time-travel info panamerica-portal` and record it.
+4. Read-only pre-check: `npx wrangler d1 execute panamerica-portal --remote --command="SELECT COUNT(*) AS n FROM pragma_table_info('owners') WHERE name = 'owner_role'"`.
+   Stop if `n` is 1.
+5. Apply only 0010 by hand: `npx wrangler d1 execute panamerica-portal --remote --file=migrations/0010_owner_role.sql`,
+   then re-run the pre-check and expect `n` = 1 (no rows change: `owner_role` stays NULL everywhere).
+6. Merge and deploy the code, then unauth smoke: `/api/portal/session` and admin API routes 401
+   (no 500s); `/admin/` and `/admin/managers/` 200.
+
+Applied 2026-11-24 ~11:37 PM ET (with #37): backup taken, Time Travel bookmark recorded, pre-check 0,
+post-check 1.
+
+Rollback: `ALTER TABLE owners DROP COLUMN owner_role;` (or restore the Time Travel bookmark).
+Safe without reverting the code: reads fall back to the derived rule (owns a car, or not a
+manager), and any owner role granted since the apply is lost (grant it again, or add the car).
