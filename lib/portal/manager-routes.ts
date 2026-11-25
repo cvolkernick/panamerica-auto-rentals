@@ -2,23 +2,32 @@
  * Admin-only manager routes (phase 1). The caller has already checked isAdmin and CSRF.
  *
  *   GET   /api/portal/admin/managers                  list + current cars + accrued share
- *   POST  /api/portal/admin/managers                  { name, shareBps, effectiveFrom } (seeds the first rate)
+ *   POST  /api/portal/admin/managers                  { name, email, shareBps, effectiveFrom } (new account + first rate)
  *   GET   /api/portal/admin/managers/:id              manager, rate history, assignment history, accrual
  *   PATCH /api/portal/admin/managers/:id              { name } (share changes go through rates)
  *   GET   /api/portal/admin/managers/:id/rates        dated share history
  *   POST  /api/portal/admin/managers/:id/rates        { shareBps, effectiveFrom } forward only
+ *   POST  /api/portal/admin/managers/:id/account      { email } new login account for an unlinked manager
+ *   POST  /api/portal/admin/managers/:id/link         { ownerId, confirm: true } explicit link to an existing account
+ *   POST  /api/portal/admin/managers/:id/invite       one-time invite for the linked account (/manager/invite/)
  *   GET   /api/portal/admin/cars/:id/managers         car's manager history (newest first)
  *   POST  /api/portal/admin/cars/:id/managers         { managerId | null, startDate }
  *   POST  /api/portal/admin/cars/:id/managers/undo    undo the last assignment change
  */
-import { getCarById } from "./db";
+import { getCarById, getOwnerByEmail, getOwnerById, getPasswordHash, uniqueField } from "./db";
 import type { PortalD1 } from "./d1";
 import { json, readJson, validationError } from "./http";
+import { createOwnerInvite, MANAGER_INVITE_URL_PREFIX } from "./invite";
 import { todayEastern } from "./ledger";
 import {
   assignmentJson,
   closeAssignment,
+  createAccountForManager,
   deleteAssignment,
+  getManagerByAccount,
+  linkManagerAccount,
+  parseAccountCreate,
+  parseAccountLink,
   getManager,
   insertAssignment,
   insertManager,
@@ -62,6 +71,21 @@ function parsePathId(raw: string): number | null {
 function duplicateName(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return /UNIQUE/i.test(message) && /managers\.name|name/i.test(message);
+}
+
+function accountConflict(): Response {
+  // No owner id or name in the reply: the admin must pick and confirm the account explicitly.
+  return json(
+    {
+      error: "conflict",
+      reason: "email_has_account",
+      fields: {
+        email:
+          "That email already has a portal account. It was not linked. To use it, link that exact account by id and confirm.",
+      },
+    },
+    409
+  );
 }
 
 function openAssignmentConflict(error: unknown): boolean {
@@ -130,12 +154,15 @@ export async function routeAdminManagers(
       if (!body.ok) return body.response;
       const parsed = parseManagerCreate(body.value);
       if (!parsed.ok) return validationError(parsed.fields);
+      // Email match must never auto-link an existing account (docs/manager-role.md).
+      if (await getOwnerByEmail(db, parsed.value.email)) return accountConflict();
       try {
         const id = await insertManager(db, parsed.value, actorId);
         const row = await getManager(db, id);
         if (!row) return json({ error: "server_error" }, 500);
         return json({ manager: managerJson(row, await listRates(db, id), todayEastern()) }, 201);
       } catch (error) {
+        if (uniqueField(error) === "email") return accountConflict();
         if (duplicateName(error)) {
           return json({ error: "conflict", fields: { name: "A manager with this name already exists." } }, 409);
         }
@@ -143,6 +170,59 @@ export async function routeAdminManagers(
       }
     }
     return methodNotAllowed("GET, POST");
+  }
+
+  const accountMatch = path.match(/^\/api\/portal\/admin\/managers\/([1-9]\d*)\/(account|link|invite)$/);
+  if (accountMatch) {
+    const id = parsePathId(accountMatch[1]);
+    if (id === null) return notFound();
+    const existing = await getManager(db, id);
+    if (!existing) return notFound();
+    if (method !== "POST") return methodNotAllowed("POST");
+    const action = accountMatch[2];
+    if (action === "invite") {
+      if (existing.account_id == null) return json({ error: "conflict", reason: "manager_not_linked" }, 409);
+      const accountId = Number(existing.account_id);
+      // An explicitly linked account that already has a password signs in as it does today.
+      if (await getPasswordHash(db, accountId)) {
+        return json({ error: "conflict", reason: "account_has_password" }, 409);
+      }
+      return createOwnerInvite(db, accountId, new Date(), MANAGER_INVITE_URL_PREFIX);
+    }
+    if (existing.account_id != null) return json({ error: "conflict", reason: "manager_already_linked" }, 409);
+    const body = await readJson(request);
+    if (!body.ok) return body.response;
+    if (action === "account") {
+      const parsed = parseAccountCreate(body.value);
+      if (!parsed.ok) return validationError(parsed.fields);
+      if (await getOwnerByEmail(db, parsed.value.email)) return accountConflict();
+      try {
+        await createAccountForManager(db, id, existing.name, parsed.value.email);
+      } catch (error) {
+        if (uniqueField(error) === "email") return accountConflict();
+        throw error;
+      }
+    } else {
+      const parsed = parseAccountLink(body.value);
+      if (!parsed.ok) return validationError(parsed.fields);
+      if (!(await getOwnerById(db, parsed.value.ownerId))) {
+        return validationError({ ownerId: "Account not found." });
+      }
+      if (await getManagerByAccount(db, parsed.value.ownerId)) {
+        return json({ error: "conflict", reason: "account_has_manager" }, 409);
+      }
+      try {
+        const changed = await linkManagerAccount(db, id, parsed.value.ownerId);
+        if (changed !== 1) return json({ error: "conflict", reason: "manager_already_linked" }, 409);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (/UNIQUE/i.test(message)) return json({ error: "conflict", reason: "account_has_manager" }, 409);
+        throw error;
+      }
+    }
+    const row = await getManager(db, id);
+    if (!row) return notFound();
+    return json(await managerDetail(db, row));
   }
 
   const managerMatch = path.match(/^\/api\/portal\/admin\/managers\/([1-9]\d*)$/);

@@ -25,6 +25,8 @@ export const INVITE_TTL_MS = 72 * 60 * 60 * 1000;
 export const INVITE_ATTEMPT_EMAIL = "invite";
 const INVITE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 const INVITE_URL_PREFIX = "https://www.panamericafleet.com/owner/invite/?t=";
+/** Same token, table, and API as the owner invite. Only the page differs. */
+export const MANAGER_INVITE_URL_PREFIX = "https://www.panamericafleet.com/manager/invite/?t=";
 
 export function maskEmail(email: string): string {
   const at = email.lastIndexOf("@");
@@ -62,7 +64,8 @@ function inviteUsable(row: OwnerInviteRow | null, nowIso: string): row is OwnerI
 export async function createOwnerInvite(
   db: PortalD1,
   ownerId: number,
-  now = new Date()
+  now = new Date(),
+  urlPrefix = INVITE_URL_PREFIX
 ): Promise<Response> {
   const owner = await getOwnerById(db, ownerId);
   if (!owner) return json({ error: "not_found" }, 404);
@@ -71,7 +74,7 @@ export async function createOwnerInvite(
   const expiresAt = new Date(now.getTime() + INVITE_TTL_MS).toISOString();
   await invalidateUnusedInvites(db, ownerId, createdAt);
   await insertOwnerInvite(db, await sha256Hex(token), ownerId, createdAt, expiresAt);
-  return json({ url: `${INVITE_URL_PREFIX}${token}`, expiresAt }, 201);
+  return json({ url: `${urlPrefix}${token}`, expiresAt }, 201);
 }
 
 async function rejectInvite(
@@ -130,6 +133,16 @@ export async function handleInvite(
   if (!INVITE_TOKEN_PATTERN.test(token) || !derived) return rejectInvite(db, ip, nowIso);
 
   const tokenHash = await sha256Hex(token);
+  // Optional account check: the page sends back the email the GET showed. A token issued for a
+  // different account fails exactly like a used or expired one, and is not consumed.
+  if ("email" in record) {
+    const expected = typeof record.email === "string" ? record.email.trim().toLowerCase() : "";
+    const pending = await getOwnerInviteByHash(db, tokenHash);
+    const account = inviteUsable(pending, nowIso) ? await getOwnerById(db, Number(pending.owner_id)) : null;
+    if (!account || !expected || account.email.trim().toLowerCase() !== expected) {
+      return rejectInvite(db, ip, nowIso);
+    }
+  }
   const claimed = await claimOwnerInvite(db, tokenHash, nowIso, nowIso);
   if (!claimed) return rejectInvite(db, ip, nowIso);
   const row = await getOwnerInviteByHash(db, tokenHash);

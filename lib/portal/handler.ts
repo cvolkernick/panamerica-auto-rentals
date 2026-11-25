@@ -35,6 +35,8 @@ import { createOwnerInvite, handleInvite } from "./invite";
 import { ledgerTotals, monthBounds } from "./ledger";
 import { authenticate, handleLogin, handleLogout, handleSetupPassword, requireCsrf } from "./login";
 import { routeAdminManagers } from "./manager-routes";
+import { isManagerPath, routeManager } from "./manager-view";
+import { accountRoles } from "./roles";
 import { routeAdminMoney, routeOwnerMoney } from "./money-routes";
 import { handleTeam, isTeamPath } from "./team";
 import { carDeleteConflict } from "./money-store";
@@ -184,8 +186,12 @@ async function route(request: Request, env: PortalEnv): Promise<Response> {
 
   if (path === "/api/portal/session") {
     if (method !== "GET") return methodNotAllowed("GET");
-    return json({ email: auth.email, owner: auth.owner, csrfToken: auth.csrfToken });
+    const roles = await accountRoles(db, auth.owner);
+    return json({ email: auth.email, owner: auth.owner, csrfToken: auth.csrfToken, ...roles });
   }
+
+  // Manager view: read-only, scoped to this account's managers row and its assignment windows.
+  if (isManagerPath(path)) return routeManager(request, db, path, method, auth.owner.id);
 
   if (path === "/api/portal/cars") {
     if (method !== "GET") return methodNotAllowed("GET");
