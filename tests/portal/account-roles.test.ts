@@ -274,3 +274,54 @@ describe("manager invites work like owner invites", () => {
     assert.equal(await redeem(env, ownerToken, MANAGER_EMAIL), 400);
   });
 });
+
+describe("follow-ups to #37: owners-list reset guard and grant input", () => {
+  test("owners-list invite for a dual-role account with a password needs { reset: true }", async () => {
+    const env = adminEnv();
+    const owner = await addOwner(env, "Olive Owner", OWNER_EMAIL);
+    // Plain owner with a password: unchanged, a new link is still a password reset.
+    await sql(env, `UPDATE owners SET password_hash = 'x' WHERE id = ?`, owner);
+    assert.equal((await call(env, "POST", `/api/portal/admin/owners/${owner}/invite`)).status, 201);
+
+    // Dual role without a password yet: no guard (first invite).
+    const mia = await createManager(env, "Mia Manager", MANAGER_EMAIL);
+    assert.equal((await call(env, "POST", `/api/portal/admin/owners/${mia.accountId}/invite`)).status, 201);
+    assert.equal(await redeem(env, tokenOf((await invite(env, mia.id)).data?.url), MANAGER_EMAIL), 200);
+
+    // Dual role with a password: refused without reset, also for a junk body or reset: "yes".
+    const path = `/api/portal/admin/owners/${mia.accountId}/invite`;
+    for (const body of [undefined, {}, { reset: "yes" }]) {
+      const refused = await call(env, "POST", path, body);
+      assert.equal(refused.status, 409, JSON.stringify(body));
+      assert.equal(refused.data?.reason, "account_has_password");
+    }
+    const hash = await getPasswordHash(requireDb(env), mia.accountId);
+    const reset = await call(env, "POST", path, { reset: true });
+    assert.equal(reset.status, 201, reset.text);
+    assert.equal(await getPasswordHash(requireDb(env), mia.accountId), hash);
+
+    // Same for an owner linked as a manager from an existing account.
+    const linked = await call(env, "POST", "/api/portal/admin/managers", {
+      name: "Olive Manager",
+      ownerId: owner,
+      confirm: true,
+      shareBps: 1000,
+      effectiveFrom: "2026-03-01",
+    });
+    assert.equal(linked.status, 201, linked.text);
+    assert.equal((await call(env, "POST", `/api/portal/admin/owners/${owner}/invite`)).data?.reason, "account_has_password");
+  });
+
+  test("owner-role grant refuses an email field even with confirm: true", async () => {
+    const env = adminEnv();
+    const mia = await createManager(env, "Mia Manager", MANAGER_EMAIL);
+    const res = await call(env, "POST", `/api/portal/admin/owners/${mia.accountId}/owner-role`, {
+      confirm: true,
+      email: MANAGER_EMAIL,
+    });
+    assert.equal(res.status, 400);
+    assert.ok((res.data?.fields as Record<string, string>).email);
+    const rows = await accounts(env);
+    assert.deepEqual(rows.find((r) => r.id === mia.accountId)?.roles, { owner: false, manager: true });
+  });
+});
