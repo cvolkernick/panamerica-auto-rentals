@@ -46,3 +46,16 @@ export async function readJson(
     return { ok: false, response: json({ error: "invalid_json" }, 400) };
   }
 }
+
+/** Optional JSON body (the invite routes): empty or invalid JSON reads as no options. */
+export async function readOptionalJson(request: Request): Promise<Record<string, unknown> | null> {
+  const text = await request.text().catch(() => "");
+  if (!text.trim() || text.length > 10_000) return null;
+  try {
+    const value = JSON.parse(text) as unknown;
+    return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
