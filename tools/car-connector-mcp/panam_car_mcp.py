@@ -252,6 +252,14 @@ def get_statement(car_id: int, month: str | None = None, transport=None):
                    transport=transport)
 
 
+def get_car_manager(car_id: int, transport=None):
+    return request("GET", f"/cars/{_id('car_id', car_id)}/manager", transport=transport)
+
+
+def list_car_managers(transport=None):
+    return request("GET", "/managers/assignments", transport=transport)
+
+
 def get_write_log(car_id: int | None = None, limit: int = 50, transport=None):
     params: dict[str, str] = {"limit": str(max(1, min(int(limit), 200)))}
     if car_id is not None:
@@ -264,6 +272,7 @@ TOOL_NAMES = (
     "panam_list_expenses", "panam_add_expense", "panam_update_expense", "panam_delete_expense",
     "panam_list_income", "panam_add_income", "panam_update_income", "panam_delete_income",
     "panam_get_statement", "panam_get_write_log",
+    "panam_get_car_manager", "panam_list_car_managers",
 )
 
 
@@ -362,6 +371,25 @@ def build_server():
     def panam_get_write_log(car_id: int | None = None, limit: int = 50) -> dict:
         """Recent connector writes (newest first) with agent name, action, before and after."""
         return get_write_log(car_id, limit)
+
+    @mcp.tool()
+    def panam_get_car_manager(car_id: int) -> dict:
+        """Read-only: who manages this car today (America/New_York).
+
+        Returns {as_of, car_id, manager, owner_type}. manager is null when nobody is assigned,
+        else {id, name, since (assignment start date), contact_ref ("manager:<id>"),
+        has_portal_account}. owner_type is "company" (Panamerica-owned) or "client".
+        No owner names, emails, or phone numbers: map contact_ref to a contact yourself.
+        """
+        return get_car_manager(car_id)
+
+    @mcp.tool()
+    def panam_list_car_managers() -> dict:
+        """Read-only: today's manager for every car. {as_of, assignments: [{car_id, manager, owner_type}]}.
+
+        Same item shape as panam_get_car_manager. Use it to route a car question to the right person.
+        """
+        return list_car_managers()
 
     return mcp
 

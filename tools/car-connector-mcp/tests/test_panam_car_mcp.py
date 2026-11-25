@@ -111,3 +111,56 @@ def test_tool_registration_has_no_payout_or_car_delete_tools():
     names = {t.name for t in asyncio.run(server.list_tools())}
     assert names == set(pm.TOOL_NAMES)
     assert not any("payout" in n or n == "panam_delete_car" or "close" in n for n in names)
+
+
+MANAGER_ITEM = {
+    "car_id": 2,
+    "manager": {"id": 3, "name": "Ana Example", "since": "2026-11-01",
+                "contact_ref": "manager:3", "has_portal_account": True},
+    "owner_type": "company",
+}
+
+
+def test_get_car_manager_is_a_read_only_get():
+    seen = []
+    body = {"as_of": "2026-11-25", **MANAGER_ITEM}
+    out = pm.get_car_manager(2, transport=_transport(body=body, seen=seen))
+    assert out == body
+    req = seen[0]
+    assert req.method == "GET"
+    assert str(req.url) == "https://portal.test/api/portal/team/cars/2/manager"
+    assert req.headers["authorization"] == f"Bearer {TOKEN}"
+    assert req.content == b""
+
+
+def test_get_car_manager_rejects_bad_ids_before_sending():
+    seen = []
+    for bad in (0, -1, "2; drop", None):
+        with pytest.raises(pm.CarConnectorError):
+            pm.get_car_manager(bad, transport=_transport(seen=seen))
+    assert seen == []
+
+
+def test_get_car_manager_unknown_car_is_a_clear_error():
+    with pytest.raises(pm.CarConnectorError, match="404"):
+        pm.get_car_manager(999, transport=_transport(404, {"error": "car_not_found"}))
+
+
+def test_list_car_managers_is_a_read_only_get():
+    seen = []
+    body = {"as_of": "2026-11-25", "assignments": [MANAGER_ITEM,
+            {"car_id": 5, "manager": None, "owner_type": "client"}]}
+    out = pm.list_car_managers(transport=_transport(body=body, seen=seen))
+    assert out == body
+    req = seen[0]
+    assert req.method == "GET"
+    assert str(req.url) == "https://portal.test/api/portal/team/managers/assignments"
+    assert not any("phone" in k or "email" in k for item in out["assignments"] for k in item)
+
+
+def test_manager_tools_are_registered_and_read_only():
+    server = pm.build_server()
+    tools = {t.name: t for t in asyncio.run(server.list_tools())}
+    assert {"panam_get_car_manager", "panam_list_car_managers"} <= set(tools)
+    assert set(tools["panam_get_car_manager"].inputSchema.get("properties", {})) == {"car_id"}
+    assert set(tools["panam_list_car_managers"].inputSchema.get("properties", {})) == set()
