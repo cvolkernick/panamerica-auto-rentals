@@ -21,9 +21,39 @@ before writing.
 | `panam_delete_income(car_id, income_id)` | `DELETE /cars/:id/income/:tid` (connector-created manual income only) | write |
 | `panam_get_statement(car_id, month?)` | `GET /cars/:id/statement` | read |
 | `panam_get_write_log(car_id?, limit?)` | `GET /write-log` | read |
+| `panam_get_car_manager(car_id)` | `GET /cars/:id/manager` | read |
+| `panam_list_car_managers()` | `GET /managers/assignments` | read |
+
+### Car-to-manager lookup
+
+Read-only. "Today" is the America/New_York date. The current manager is the assignment
+with `start_date <= today` and no `end_date` or `end_date > today` (start inclusive, end
+exclusive, the same rule as statements). A car with no covering assignment has
+`manager: null`.
+
+```json
+{
+  "as_of": "2026-11-25",
+  "car_id": 2,
+  "manager": {
+    "id": 3,
+    "name": "Ana Example",
+    "since": "2026-11-01",
+    "contact_ref": "manager:3",
+    "has_portal_account": true
+  },
+  "owner_type": "company"
+}
+```
+
+`GET /managers/assignments` returns `{"as_of": "...", "assignments": [ ...same item without as_of... ]}`,
+one item per car in car-id order. `owner_type` is `company` when the car's owner is an admin
+account (Panamerica-owned) and `client` otherwise. No owner names, no emails, and no phone
+numbers are returned; map `contact_ref` to a contact in your own address book.
 
 Not available, on purpose: creating or deleting cars, moving a car to another owner,
 payouts, period close, owner records (car data carries `ownerId` only), guest data,
+manager emails or phone numbers, assigning or changing a car's manager,
 and `commission` expenses (the management fee is computed by the statement from trip
 income; existing commission rows are admin-only). Each entry is capped at 5,000,000
 cents ($50,000). `PANAM_AGENT_NAME` is a self-asserted label for the write log, not a

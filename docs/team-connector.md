@@ -29,6 +29,10 @@ Server side of the car connector MCP (`tools/car-connector-mcp`). See that READM
 | GET, PATCH, DELETE | `/cars/:id/income/:tid` | manual rows only; DELETE only for connector-created rows |
 | GET | `/cars/:id/statement` | read-only; the fee, carry-forward and payout due come from `statement.ts` |
 | GET | `/write-log` | `?carId=&limit=` (max 200), newest first |
+| GET | `/cars/:id/manager` | read-only; today's manager (America/New_York) or `null`, plus `owner_type`; 404 for an unknown car |
+| GET | `/managers/assignments` | read-only; the same item for every car, in car-id order |
+
+Manager lookup item: `{car_id, manager: {id, name, since, contact_ref: "manager:<id>", has_portal_account} | null, owner_type: "company" | "client"}`. Single-car reads add `as_of` at the top level; the list is `{as_of, assignments: [...]}`. The current assignment covers today with `start_date` inclusive and `end_date` exclusive. `owner_type` is `company` when the car's owner is an admin account (stored `is_admin` or `ADMIN_EMAILS`), else `client`. It never returns owner names, emails, or phone numbers, and writes nothing (no `team_write_log` row).
 
 There are no payout, period-close, owner, import, or car create/delete routes.
 

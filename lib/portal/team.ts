@@ -11,6 +11,9 @@
  * - Income: list all trips; add, edit, and delete only manual (connector) income.
  *   Imported Turo/Wheelbase trips are read-only here; they change by re-import.
  * - Statements: read-only. No payouts, no period close, no owner or guest data.
+ * - Managers: read-only lookup of which manager runs each car today (name, since,
+ *   contact_ref "manager:<id>", portal-account flag) and owner_type company/client.
+ *   No owner names, no emails, no phone numbers.
  * The management fee, carry-forward, and payout-due figures are computed by the
  * statement code from these rows; nothing here sets them.
  *
@@ -22,13 +25,15 @@ import type { PortalD1 } from "./d1";
 import type { PortalEnv } from "./env";
 import { clientIp } from "./hosts";
 import { json, rateLimited, readJson, unauthorized, validationError } from "./http";
-import { currentMonthEastern, monthBounds } from "./ledger";
+import { currentMonthEastern, monthBounds, todayEastern } from "./ledger";
 import { expenseJson, getExpense, listExpenses, type ExpenseRow } from "./money-store";
 import { secretsEqual } from "./secrets";
 import { carStatement } from "./statement-store";
 import {
   connectorCreated,
   deleteExpenseStatement,
+  getCarManager,
+  listCarManagers,
   deleteManualIncomeStatement,
   getIncome,
   incomeJson,
@@ -329,7 +334,7 @@ export async function handleTeam(request: Request, env: PortalEnv, db: PortalD1,
 
   if (rest === "/whoami") {
     if (method !== "GET") return methodNotAllowed("GET");
-    return json({ agentName: agent, scope: "cars:read,cars:write,expenses:write,income:write,statements:read" });
+    return json({ agentName: agent, scope: "cars:read,cars:write,expenses:write,income:write,statements:read,managers:read" });
   }
 
   if (rest === "/write-log") {
@@ -348,6 +353,23 @@ export async function handleTeam(request: Request, env: PortalEnv, db: PortalD1,
     if (method !== "GET") return methodNotAllowed("GET");
     const cars = await listAllCars(db);
     return json({ cars: cars.map(teamCarJson) });
+  }
+
+  if (rest === "/managers/assignments") {
+    if (method !== "GET") return methodNotAllowed("GET");
+    const today = todayEastern();
+    return json({ as_of: today, assignments: await listCarManagers(db, env, today) });
+  }
+
+  const managerMatch = /^\/cars\/([1-9]\d*)\/manager$/.exec(rest);
+  if (managerMatch) {
+    if (method !== "GET") return methodNotAllowed("GET");
+    const id = parsePathId(managerMatch[1]);
+    if (id === null) return notFound();
+    const today = todayEastern();
+    const row = await getCarManager(db, env, id, today);
+    if (!row) return json({ error: "car_not_found" }, 404);
+    return json({ as_of: today, ...row });
   }
 
   const match = /^\/cars\/([1-9]\d*)(?:\/(expenses|income|statement)(?:\/([1-9]\d*))?)?$/.exec(rest);
