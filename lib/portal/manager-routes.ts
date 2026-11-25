@@ -197,7 +197,8 @@ export async function routeAdminManagers(
       if (!parsed.ok) return validationError(parsed.fields);
       if (await getOwnerByEmail(db, parsed.value.email)) return accountConflict();
       try {
-        await createAccountForManager(db, id, existing.name, parsed.value.email);
+        const linked = await createAccountForManager(db, id, existing.name, parsed.value.email);
+        if (!linked) return json({ error: "conflict", reason: "manager_already_linked" }, 409);
       } catch (error) {
         if (uniqueField(error) === "email") return accountConflict();
         throw error;

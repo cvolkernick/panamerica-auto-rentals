@@ -408,9 +408,20 @@ const RATE_COLUMNS = "id, manager_id, share_bps, effective_from, created_at";
  * manager writes never fall back to separate steps, so a failed insert can't leave a car
  * without its manager or a manager without its first rate.
  */
-async function runAll(db: PortalD1, statements: ReturnType<PortalD1["prepare"]>[]): Promise<void> {
+async function runAll(db: PortalD1, statements: ReturnType<PortalD1["prepare"]>[]): Promise<unknown[]> {
   if (typeof db.batch !== "function") throw new Error("d1_batch_required");
-  await db.batch(statements);
+  return db.batch(statements);
+}
+
+function changesOf(result: unknown): number {
+  const meta = (result as { meta?: { changes?: unknown } } | null)?.meta;
+  return Number(meta?.changes ?? 0);
+}
+
+/** True for the D1/SQLite error when migration 0009 (managers.account_id) is not applied. */
+export function isMissingAccountColumn(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /no such column:?\s*(\w+\.)?account_id/i.test(message);
 }
 
 const ASSIGNMENT_SELECT = `SELECT a.id, a.car_id, a.manager_id, a.start_date, a.end_date, a.created_at,
@@ -436,6 +447,20 @@ export async function getManagerByAccount(db: PortalD1, accountId: number): Prom
     .prepare(`SELECT ${MANAGER_COLUMNS} FROM managers WHERE account_id = ?`)
     .bind(accountId)
     .first<ManagerRow>();
+}
+
+/**
+ * Same lookup for the sign-in paths (login, session, manager view). If 0009 is missing, failed,
+ * or rolled back, the column does not exist: that means no manager role, never a broken session.
+ * Any other error still throws.
+ */
+export async function findManagerRole(db: PortalD1, accountId: number): Promise<ManagerRow | null> {
+  try {
+    return await getManagerByAccount(db, accountId);
+  } catch (error) {
+    if (isMissingAccountColumn(error)) return null;
+    throw error;
+  }
 }
 
 /**
@@ -466,15 +491,25 @@ export async function insertManager(db: PortalD1, write: ManagerWrite, actorId: 
   return Number(row.id);
 }
 
-/** New login account for an unlinked manager, and the link, as one D1 batch. Never an admin. */
+/**
+ * New login account for an unlinked manager, and the link, as one D1 batch. Never an admin.
+ * The owners INSERT only runs while this manager is still unlinked, inside the same transaction
+ * as the UPDATE, so a race cannot leave an orphan owners row. Returns false (nothing written)
+ * when the manager was linked in the meantime.
+ */
 export async function createAccountForManager(
   db: PortalD1,
   managerId: number,
   name: string,
   email: string
-): Promise<void> {
-  await runAll(db, [
-    db.prepare(`INSERT INTO owners (name, email, is_admin) VALUES (?, ?, 0)`).bind(name, email),
+): Promise<boolean> {
+  const results = await runAll(db, [
+    db
+      .prepare(
+        `INSERT INTO owners (name, email, is_admin)
+         SELECT ?, ?, 0 WHERE EXISTS (SELECT 1 FROM managers WHERE id = ? AND account_id IS NULL)`
+      )
+      .bind(name, email, managerId),
     db
       .prepare(
         `UPDATE managers SET account_id = (SELECT id FROM owners WHERE email = ?),
@@ -483,6 +518,21 @@ export async function createAccountForManager(
       )
       .bind(email, managerId),
   ]);
+  const inserted = changesOf(results[0]);
+  const linked = changesOf(results[1]);
+  if (inserted === 1 && linked === 1) return true;
+  if (inserted === 1) {
+    // Defensive: should not happen inside one transaction. Remove the unlinked new account.
+    await db
+      .prepare(
+        `DELETE FROM owners WHERE email = ? AND password_hash IS NULL
+           AND NOT EXISTS (SELECT 1 FROM managers WHERE account_id = owners.id)
+           AND NOT EXISTS (SELECT 1 FROM cars WHERE owner_id = owners.id)`
+      )
+      .bind(email)
+      .run();
+  }
+  return false;
 }
 
 /**

@@ -1,5 +1,5 @@
 import type { PortalD1 } from "./d1";
-import { getManagerByAccount } from "./managers";
+import { findManagerRole } from "./managers";
 import type { OwnerJson, SessionRoles } from "./types";
 
 /**
@@ -11,7 +11,7 @@ import type { OwnerJson, SessionRoles } from "./types";
  */
 export async function accountRoles(db: PortalD1, owner: OwnerJson): Promise<SessionRoles> {
   const [manager, cars] = await Promise.all([
-    getManagerByAccount(db, owner.id),
+    findManagerRole(db, owner.id),
     db.prepare(`SELECT COUNT(*) AS n FROM cars WHERE owner_id = ?`).bind(owner.id).first<{ n: number }>(),
   ]);
   const ownsCars = Number(cars?.n ?? 0) > 0;

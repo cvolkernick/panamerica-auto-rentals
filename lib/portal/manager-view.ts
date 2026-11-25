@@ -19,7 +19,7 @@ import { forbidden, json, validationError } from "./http";
 import { currentMonthEastern, monthBounds, todayEastern } from "./ledger";
 import {
   assignmentCovers,
-  getManagerByAccount,
+  findManagerRole,
   listRates,
   managerShareCents,
   rateJson,
@@ -319,7 +319,7 @@ export async function routeManager(
   method: string,
   accountId: number
 ): Promise<Response> {
-  const manager = await getManagerByAccount(db, accountId);
+  const manager = await findManagerRole(db, accountId);
   if (!manager) return forbidden("not_manager");
   if (method !== "GET" && method !== "HEAD") return readOnly();
   const managerId = Number(manager.id);
