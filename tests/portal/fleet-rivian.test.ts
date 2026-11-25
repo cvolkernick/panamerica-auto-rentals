@@ -22,7 +22,7 @@ function vehicle(slug: string): FleetVehicle {
   return found;
 }
 
-test("2023 Rivian R1S card is available and shows no price", () => {
+test("2023 Rivian R1S card is available with Book Direct and Turo, and shows no price", () => {
   const rivian = vehicle("r1s-2023");
   assert.equal(rivian.year, 2023);
   assert.equal(rivian.make, "Rivian");
@@ -47,19 +47,21 @@ test("2023 Rivian R1S card is available and shows no price", () => {
   assert.equal(rivian.links.turo, bookTuro);
   assert.equal(rivian.links.ride, undefined);
   assert.equal(rivian.links.direct?.wheelbaseRentalId, "570552");
-  assert.equal(rivian.links.direct?.enabled, false);
+  assert.equal(rivian.links.direct?.enabled, true);
   assert.equal(wheelbaseBookingUrl("570552"), widgetUrl);
 
   const buttons = bookingButtons(rivian);
   assert.deepEqual(
     buttons.map((button) => button.label),
-    ["Book on Turo"]
+    ["Book Direct", "Book on Turo"]
   );
-  assert.equal(buttons[0]?.kind, "link");
-  if (buttons[0]?.kind !== "link") return;
-  assert.equal(buttons[0].label, "Book on Turo");
-  assert.equal(buttons[0].href, bookTuro);
-  assert.equal(buttons.some((button) => button.kind === "direct"), false);
+  assert.equal(buttons[0]?.kind, "direct");
+  if (buttons[0]?.kind !== "direct") return;
+  assert.equal(buttons[0].rentalId, "570552");
+  assert.equal(buttons[1]?.kind, "link");
+  if (buttons[1]?.kind !== "link") return;
+  assert.equal(buttons[1].label, "Book on Turo");
+  assert.equal(buttons[1].href, bookTuro);
 
   const corollaId = vehicle("corolla-2022").links.direct?.wheelbaseRentalId;
   assert.ok(corollaId);
