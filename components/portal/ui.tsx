@@ -22,16 +22,20 @@ export function PortalShell({
   title,
   lede,
   actions,
+  switcher,
   children,
 }: {
   eyebrow: string;
   title: string;
   lede?: ReactNode;
   actions?: ReactNode;
+  /** Optional portal switcher (multi-role accounts), shown above the eyebrow. */
+  switcher?: ReactNode;
   children?: ReactNode;
 }) {
   return (
     <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-20">
+      {switcher}
       <p className="font-heading text-xs tracking-[0.28em] text-gold uppercase">
         {eyebrow}
       </p>
@@ -87,7 +91,18 @@ export function PortalForbidden({ email }: { email?: string }) {
   );
 }
 
-export function PortalLogin({ onSuccess }: { onSuccess: () => void }) {
+export function PortalLogin({
+  onSuccess,
+  title = "Owner sign-in",
+  lede = "Use the email and password for your owner account.",
+  footer,
+}: {
+  onSuccess: () => void;
+  title?: string;
+  lede?: ReactNode;
+  /** Shown under the form (the unified /sign-in/ page adds a line for renters). */
+  footer?: ReactNode;
+}) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -136,11 +151,7 @@ export function PortalLogin({ onSuccess }: { onSuccess: () => void }) {
   }
 
   return (
-    <PortalShell
-      eyebrow="Sign in"
-      title="Owner sign-in"
-      lede="Use the email and password for your owner account."
-    >
+    <PortalShell eyebrow="Sign in" title={title} lede={lede}>
       <form
         className="mt-8 grid max-w-md gap-5 rounded-xl bg-navy-mid p-5 ring-1 ring-white/10 sm:p-8"
         onSubmit={onSubmit}
@@ -178,6 +189,7 @@ export function PortalLogin({ onSuccess }: { onSuccess: () => void }) {
           {submitting ? "Signing in" : "Sign in"}
         </Button>
       </form>
+      {footer ? <div className="mt-6 max-w-md">{footer}</div> : null}
     </PortalShell>
   );
 }

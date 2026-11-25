@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { cyberfleetNav, nav } from "@/lib/site";
+import { cyberfleetNav, nav, signInNav } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
 export function SiteHeader() {
@@ -78,6 +78,17 @@ export function SiteHeader() {
           >
             {cyberfleetNav.label}
           </Link>
+          <Link
+            href={signInNav.href}
+            className={cn(
+              "rounded-md px-2 py-2 font-heading text-[0.65rem] tracking-[0.16em] uppercase transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold",
+              pathname.startsWith(signInNav.match)
+                ? "text-white"
+                : "text-white/65 hover:text-white"
+            )}
+          >
+            {signInNav.label}
+          </Link>
         </nav>
 
         <Button
@@ -118,6 +129,15 @@ export function SiteHeader() {
                 className="block rounded-md px-3 py-3 font-heading text-sm tracking-[0.16em] text-white/45 uppercase hover:bg-white/5 hover:text-white/70"
               >
                 {cyberfleetNav.label}
+              </Link>
+            </li>
+            <li>
+              <Link
+                href={signInNav.href}
+                onClick={() => setOpen(false)}
+                className="block rounded-md px-3 py-3 font-heading text-sm tracking-[0.16em] text-white/75 uppercase hover:bg-white/5 hover:text-white"
+              >
+                {signInNav.label}
               </Link>
             </li>
           </ul>
