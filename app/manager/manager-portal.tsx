@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { portalRequest } from "@/components/portal/api";
+import { PortalRoleSwitcher } from "@/components/portal/role-switcher";
 import { PortalLogin, PortalLogout, PortalNotice, PortalShell } from "@/components/portal/ui";
+import { sessionRoleFlags } from "@/lib/portal/destinations";
 import { formatMonthLabel, formatUsdFromCents } from "@/lib/portal/ledger";
 import { bpsToPercentLabel, type ManagerAccrual, type RateJson } from "@/lib/portal/managers";
 import type { SessionJson } from "@/lib/portal/types";
@@ -247,26 +249,9 @@ export function ManagerPortal() {
         <>
           Signed in as {session.email}. Your share: {self.manager.shareBps === null ? "not started" : bpsToPercentLabel(self.manager.shareBps)} of
           the company fee on trips that start while you manage the car. This view is read-only.
-          {session.roles?.owner ? (
-            <>
-              {" "}
-              <Link href="/owner/" className="text-gold hover:underline">
-                Open your own cars
-              </Link>
-              .
-            </>
-          ) : null}
-          {session.owner.isAdmin ? (
-            <>
-              {" "}
-              <Link href="/admin/" className="text-gold hover:underline">
-                Open admin
-              </Link>
-              .
-            </>
-          ) : null}
         </>
       }
+      switcher={<PortalRoleSwitcher roles={sessionRoleFlags(session)} current="manager" />}
       actions={<PortalLogout onDone={() => setReloadToken((v) => v + 1)} />}
     >
       <section className={`mt-10 ${card}`} aria-labelledby="earnings-title">

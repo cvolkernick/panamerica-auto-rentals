@@ -5,6 +5,7 @@ import { useEffect, useState, type FormEvent } from "react";
 
 import { portalRequest } from "@/components/portal/api";
 import { InviteLinkPanel, useInviteLinks } from "@/components/portal/invite-link";
+import { PortalRoleSwitcher } from "@/components/portal/role-switcher";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -17,6 +18,7 @@ import {
   portalInputClass,
 } from "@/components/portal/ui";
 import { carAdminHref } from "@/lib/portal/car-path";
+import { sessionRoleFlags, type PortalRoleFlags } from "@/lib/portal/destinations";
 import type { AdminAccountJson, CarJson, OwnerJson, PortalErrorJson, SessionJson } from "@/lib/portal/types";
 import { parseCarCreate, parseCarPatch, parseOwnerCreate, parseOwnerPatch } from "@/lib/portal/validate";
 
@@ -76,6 +78,7 @@ function roleLabel(account: AdminAccountJson): string {
 export function AdminPortal() {
   const [gate, setGate] = useState<Gate>({ kind: "loading" });
   const [email, setEmail] = useState("");
+  const [roles, setRoles] = useState<PortalRoleFlags | null>(null);
   const [owners, setOwners] = useState<AdminAccountJson[]>([]);
   const [cars, setCars] = useState<CarJson[]>([]);
   const [ownerForm, setOwnerForm] = useState<OwnerForm>(emptyOwner);
@@ -128,6 +131,7 @@ export function AdminPortal() {
         return;
       }
       setEmail(session.data.email);
+      setRoles(sessionRoleFlags(session.data));
       setOwners(ownerResult.data.owners);
       setCars(carResult.data.cars);
       setGate({ kind: "ready" });
@@ -329,13 +333,10 @@ export function AdminPortal() {
         <>
           Signed in as {email}. Add an owner, then assign each car to an owner. Create an
           invite link so that owner can set a password. Open a car for its details and
-          ledger.{" "}
-          <Link href="/owner/" className="text-gold hover:underline">
-            Your cars
-          </Link>
-          .
+          ledger.
         </>
       }
+      switcher={<PortalRoleSwitcher roles={roles} current="admin" />}
       actions={
         <div className="flex flex-wrap items-center gap-4">
           <Link
