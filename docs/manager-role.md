@@ -155,7 +155,11 @@ Before apply:
 - A later migration may make `account_id` NOT NULL only once every existing
   row is linked. That is not part of 0009.
 - Rollback of the 0009 additive step is drop the index and the column. Do not
-  drop `managers` or the other phase-1 tables.
+  drop `managers` or the other phase-1 tables. Rolling back 0009 alone, with the
+  phase 2 code left deployed, is safe: login and `GET /api/portal/session` treat a
+  missing `account_id` as no manager role and keep returning 200. Only the admin
+  managers page and the manager view stop working until 0009 is re-applied, and
+  any links made since the apply are lost (re-link them, or restore the backup).
 
 ### What a manager can and cannot see
 
@@ -322,8 +326,11 @@ rollback is `DROP TABLE car_manager_assignments; DROP TABLE manager_share_rates;
 Phase 2: `migrations/0009_manager_accounts.sql`, only after Grok's go, never from a deploy step.
 The code tolerates a missing `managers.account_id` (no manager role, sessions keep working), so
 the code ships first:
-1. Merge and deploy the phase 2 code.
-2. Check `/workspace/state/holds.json`.
+1. Check `/workspace/state/holds.json` (stop if an active hold covers Panamerica), then
+   merge and deploy the phase 2 code.
+2. Hold manager-admin writes until step 6 is done: stay off the admin managers page and
+   its routes (they need `account_id` and fail until 0009 is applied), and apply 0009
+   right after the deploy so that window stays short.
 3. Fresh backup outside the repo, mode 600:
    `npx wrangler d1 export panamerica-portal --remote --output=<backup dir>/pre-0009.sql`.
 4. Time Travel bookmark: `npx wrangler d1 time-travel info panamerica-portal` and record it.
@@ -334,3 +341,5 @@ the code ships first:
 
 Rollback: `DROP INDEX idx_managers_account_id; ALTER TABLE managers DROP COLUMN account_id;`
 (or restore the Time Travel bookmark). Never drop `managers` or the other phase-1 tables.
+Rolling back 0009 alone is safe without reverting the code: sessions and login keep working
+with no manager role; only manager-admin and the manager view are down until it is re-applied.
