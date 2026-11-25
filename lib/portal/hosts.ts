@@ -46,7 +46,9 @@ export function isPortalSurface(pathname: string): boolean {
     path === "/admin" ||
     path.startsWith("/admin/") ||
     path === "/api/portal" ||
-    path.startsWith("/api/portal/")
+    path.startsWith("/api/portal/") ||
+    path === "/sign-in" ||
+    path.startsWith("/sign-in/")
   );
 }
 

@@ -2,6 +2,7 @@
  *
  * Deliberately small and conservative:
  * - Never touches /api and /api/*, the signed-in portals (/owner, /manager, /admin),
+ *   the unified sign-in page (/sign-in),
  *   non-GET requests, cross-origin requests, or range (video) requests.
  *   Those go straight to the network as if no worker existed.
  * - Public page navigations: network-first. A good response is kept so the
@@ -17,14 +18,14 @@
  * docs/pwa.md and deploy. Every open client drops the worker and its caches
  * on its next check (sw.js is served no-cache, so that is the next visit).
  */
-const VERSION = "v2";
+const VERSION = "v3";
 const CACHE_PREFIX = "panam-";
 const PAGES = `${CACHE_PREFIX}pages-${VERSION}`;
 const ASSETS = `${CACHE_PREFIX}assets-${VERSION}`;
 const OFFLINE_URL = "/offline/";
 
 /** Paths the worker must never handle or cache. */
-const BYPASS_PREFIXES = ["/api", "/owner", "/manager", "/admin"];
+const BYPASS_PREFIXES = ["/api", "/owner", "/manager", "/admin", "/sign-in"];
 
 function isBypassed(pathname) {
   // Plain prefix match on purpose: over-matching only means "not handled",

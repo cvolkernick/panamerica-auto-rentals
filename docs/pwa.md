@@ -18,7 +18,7 @@ The public site can be installed to a phone or desktop home screen
 ## What the worker does and never does
 
 - **Never** handles `/api` and `/api/*`, `/owner*`, `/manager*`, `/admin*` (including invite
-  pages), non-GET, cross-origin or range (video) requests. Those go to the
+  pages), `/sign-in*`, non-GET, cross-origin or range (video) requests. Those go to the
   network exactly as without a worker. No portal or signed-in data is cached.
 - Public page navigations: network-first; a good copy is kept for offline use;
   otherwise `/offline/`.
@@ -65,6 +65,7 @@ switch instead of, or together with, a rollback.
 ## Start URL
 
 `start_url` is `/` (the public site). Owners and managers who install it land on
-the home page and tap through to their portal. A separate portal install
+the home page and tap **Sign in** (header, right of Cyber Fleet), which opens
+`/sign-in/` and then their portal. A separate portal install
 (`start_url` `/owner/` or `/manager/`) would need its own manifest and scope;
 not built.

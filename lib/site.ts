@@ -260,3 +260,13 @@ export const cyberfleetNav = {
   href: "/cyberfleet",
   label: "Cyber Fleet",
 } as const;
+
+/**
+ * Header link to the one sign-in page for owners, managers and the team
+ * (right of Cyber Fleet). Not a public page: noindex, not in the sitemap.
+ */
+export const signInNav = {
+  href: "/sign-in/",
+  match: "/sign-in",
+  label: "Sign in",
+} as const;

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { portalRequest } from "@/components/portal/api";
@@ -11,6 +10,8 @@ import {
   PortalNotice,
   PortalShell,
 } from "@/components/portal/ui";
+import { PortalRoleSwitcher } from "@/components/portal/role-switcher";
+import { sessionRoleFlags } from "@/lib/portal/destinations";
 import type { CarJson, SessionJson } from "@/lib/portal/types";
 
 import { CarMoney } from "../admin/car-money";
@@ -121,29 +122,9 @@ export function OwnerPortal() {
       lede={
         <>
           Signed in as {gate.session.email}. This list is only for your cars.
-          {gate.session.roles?.manager ? (
-            <>
-              {" "}
-              <Link href="/manager/" className="text-gold hover:underline">
-                Open manager view
-              </Link>
-              .
-            </>
-          ) : null}
-          {gate.session.owner.isAdmin ? (
-            <>
-              {" "}
-              <Link
-                href="/admin/"
-                className="text-gold hover:underline"
-              >
-                Open admin
-              </Link>
-              .
-            </>
-          ) : null}
         </>
       }
+      switcher={<PortalRoleSwitcher roles={sessionRoleFlags(gate.session)} current="owner" />}
       actions={<PortalLogout onDone={() => setReloadToken((value) => value + 1)} />}
     >
       {gate.cars.length === 0 ? (

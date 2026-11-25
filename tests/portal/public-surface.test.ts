@@ -54,6 +54,7 @@ test("sitemap source stays on the public paths", () => {
   assert.doesNotMatch(sitemap, /\/owner/);
   assert.doesNotMatch(sitemap, /\/admin/);
   assert.doesNotMatch(sitemap, /\/manager/);
+  assert.doesNotMatch(sitemap, /sign-in/);
 });
 
 test("robots disallows the portal and still allows the public site", () => {
@@ -63,6 +64,7 @@ test("robots disallows the portal and still allows the public site", () => {
   assert.match(robots, /\/admin\//);
   assert.match(robots, /\/manager\//);
   assert.match(robots, /\/api\//);
+  assert.match(robots, /\/sign-in\//);
 });
 
 test("header and footer do not link the portal", () => {
@@ -96,6 +98,7 @@ test("portal pages ask robots not to index", () => {
     "app/owner/statement/page.tsx",
     "app/manager/page.tsx",
     "app/manager/invite/page.tsx",
+    "app/sign-in/page.tsx",
   ]) {
     assert.match(source(path), /noindex/);
   }
@@ -152,7 +155,7 @@ test("old plans URLs redirect exactly and stay outside Functions", () => {
 
 test("functions are not invoked for public routes", () => {
   const routes = JSON.parse(source("public/_routes.json")) as FunctionRoutes;
-  assert.deepEqual(routes.include, ["/owner", "/owner/*", "/manager", "/manager/*", "/admin", "/admin/*", "/api/portal/*"]);
+  assert.deepEqual(routes.include, ["/owner", "/owner/*", "/manager", "/manager/*", "/admin", "/admin/*", "/api/portal/*", "/sign-in", "/sign-in/*"]);
   assert.deepEqual(routes.exclude, ["/admin/cars/*", "/admin/imports/*"]);
   assert.equal(functionsInvokedFor("/admin/cars/ABC1234", routes), false);
   assert.equal(functionsInvokedFor("/admin/cars/ABC1234/", routes), false);
@@ -162,7 +165,7 @@ test("functions are not invoked for public routes", () => {
   for (const path of ["/", "/fleet", "/fleet/", "/plans", "/plans/", "/management", "/management/", "/about", "/contact/", "/sitemap.xml", "/robots.txt"]) {
     assert.equal(functionsInvokedFor(path, routes), false, path);
   }
-  for (const path of ["/owner", "/owner/", "/manager", "/manager/", "/admin/", "/admin/index.html", "/api/portal/login", "/api/portal/logout", "/api/portal/session", "/api/portal/manager"]) {
+  for (const path of ["/owner", "/owner/", "/manager", "/manager/", "/admin/", "/admin/index.html", "/sign-in", "/sign-in/", "/sign-in/index.html", "/api/portal/login", "/api/portal/logout", "/api/portal/session", "/api/portal/manager"]) {
     assert.equal(functionsInvokedFor(path, routes), true, path);
   }
   assert.equal(existsSync("functions/_middleware.ts"), true);
