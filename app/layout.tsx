@@ -1,11 +1,14 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Barlow_Condensed, DM_Sans } from "next/font/google";
 
 import { LocalBusinessJsonLd } from "@/components/local-business-jsonld";
+import { ServiceWorkerRegister } from "@/components/service-worker-register";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { SITE_NAME, SITE_URL, socialMetadata } from "@/lib/seo";
 import { positioning } from "@/lib/site";
+
+import { PWA_THEME_COLOR } from "./manifest";
 
 import "./globals.css";
 
@@ -27,11 +30,23 @@ export const metadata: Metadata = {
     template: `%s · ${SITE_NAME}`,
   },
   description: positioning,
+  applicationName: SITE_NAME,
+  appleWebApp: {
+    capable: true,
+    title: "Panamerica",
+    statusBarStyle: "black",
+  },
+  // Older iOS reads only the apple- prefixed tag; Next emits the generic one.
+  other: { "apple-mobile-web-app-capable": "yes" },
   ...socialMetadata({
     title: SITE_NAME,
     description: positioning,
     path: "/",
   }),
+};
+
+export const viewport: Viewport = {
+  themeColor: PWA_THEME_COLOR,
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -53,6 +68,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           {children}
         </main>
         <SiteFooter />
+        <ServiceWorkerRegister />
       </body>
     </html>
   );
