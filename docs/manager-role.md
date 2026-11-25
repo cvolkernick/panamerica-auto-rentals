@@ -63,37 +63,58 @@ The account link is:
 - A partial unique index on `account_id` where it is not null, so unlinked phase-1 rows
   can coexist during backfill.
 - The manager role is this foreign key: a signed-in account has the manager role when a
-  `managers` row points at it. `GET /api/portal/session` should return that role and the
-  `managerId`, so the client can route to `/manager/`.
-- One account, one role. A manager account cannot be `is_admin`, cannot own cars
-  (`cars.owner_id` must not point at it), and an owner account cannot also have a
-  `managers` row. The admin owners list should not treat manager accounts as car owners.
+  `managers` row points at it. `GET /api/portal/session` should return every role that
+  applies (`isAdmin`, owner, manager, and `managerId` when linked) so the client can
+  route to `/admin/`, `/owner/`, and `/manager/` as appropriate. Both the owner and
+  manager roles can be true on the same account.
+- One account can hold both roles. The same `owners` row may own cars
+  (`cars.owner_id`) and also be referenced by `managers.account_id`. A manager may
+  manage their own car (for example, a manager who later buys a car and keeps
+  managing the rest of the fleet).
+- Owner view and manager view stay separate (a role switch or separate routes:
+  `/owner/` and `/manager/`). Each is scoped to its own data. The two views do not
+  mix: owning a car does not grant manager-range access to it, and managing a car
+  does not grant the owner statement for it, unless that same account also owns it.
+- `is_admin` stays an independent flag on the same account. Linking a manager row
+  does not grant or revoke admin. Admin routes still require `is_admin`.
+- Approvals of reimbursements, expenses, and payouts are admin-only. Owners and
+  managers do not approve them, so one account with both roles creates no approval
+  conflict. No extra self-approval safeguard is needed.
 
 ### Admin creates or invites a manager account
 
 Reuse the existing owner invite flow. Do not add a second password scheme, and do not put
 passwords, hashes, or invite tokens in this repo or in docs.
 
-1. Admin creates a manager with name, **email**, share, and effective date. One D1 batch
-   inserts the `owners` row (`is_admin = 0`), the `managers` row (name + `account_id`), and
-   the first share rate. A duplicate email is refused, same as today's owner create.
+1. Admin creates a manager with name, **email**, share, and effective date. If that
+   email is new, one D1 batch inserts the `owners` row (`is_admin = 0`), the
+   `managers` row (name + `account_id`), and the first share rate. If that email
+   already belongs to an owner account, the batch links `account_id` to that
+   existing row and inserts the `managers` row and first rate (no second login).
+   If that account already has a `managers` row, the create is refused (`account_id`
+   is unique).
 2. Admin sends a one-time invite, either through the existing
    `POST /api/portal/admin/owners/:id/invite` or a thin wrapper
    `POST /api/portal/admin/managers/:id/invite` that calls the same `createOwnerInvite`
    helper. The token is stored as SHA-256 only, 72-hour TTL, older unused invites marked
-   used, same as owners.
-3. The manager opens the invite link (`/owner/invite/` today, or a `/manager/invite/`
-   shell that hits the same `GET`/`POST /api/portal/invite`) and sets a password in the
-   browser (Argon2id, as documented in `docs/owner-portal.md`). The Worker stores only
-   the peppered HMAC.
-4. The manager signs in on `/manager/` with the same `POST /api/portal/login`. Sessions,
-   CSRF, device cookie, and rate limits are unchanged.
+   used, same as owners. Skip the invite when the account already has a password
+   (linking an existing owner); they can sign in as they do today and use `/manager/`
+   once the row is linked.
+3. When an invite is needed, the manager opens the invite link (`/owner/invite/`
+   today, or a `/manager/invite/` shell that hits the same `GET`/`POST
+   /api/portal/invite`) and sets a password in the browser (Argon2id, as documented
+   in `docs/owner-portal.md`). The Worker stores only the peppered HMAC.
+4. The manager signs in with the same `POST /api/portal/login`. Sessions, CSRF,
+   device cookie, and rate limits are unchanged. After login, the client routes
+   from the session roles: `/manager/` for the manager view, `/owner/` for the
+   owner view when that role also applies.
 
 `PORTAL_SETUP_TOKEN` stays an operator bootstrap for the seeded admin account. It is not
 how managers are onboarded, and it should stay unset in production.
 
-Until a manager row has an `account_id` and a completed invite, that manager cannot sign
-in.
+Until a manager row has an `account_id` and the account can authenticate (invite
+completed, or an already-passworded owner account), that manager cannot sign in
+with the manager role.
 
 ### Migration plan for existing manager rows (forward only)
 
@@ -103,8 +124,9 @@ from a deploy step.
 
 - Add nullable `managers.account_id` and the partial unique index.
 - Do not invent emails in SQL. Phase 1 rows have only a name. An admin links each
-  existing manager by supplying an email (creates the `owners` row, sets `account_id`,
-  then invites). Assignments, rates, and accrued share do not change.
+  existing manager by supplying an email (creates an `owners` row, or links an
+  existing one, sets `account_id`, then invites if the account has no password).
+  Assignments, rates, and accrued share do not change.
 - New manager creates require an email and an account in the same batch; name-only
   creates are refused going forward.
 - After every existing row is linked, a later migration may make `account_id` NOT NULL
@@ -117,64 +139,82 @@ from a deploy step.
 This is the authz contract phase 2 must implement once accounts exist. The portal does
 not store guest PII, and that stays a hard rule.
 
-**Can (scoped to this manager):**
+**Can (scoped to this manager, on `/manager/` and manager APIs):**
 
 - Sign in and load `/manager/` (static shell, noindex, not in the nav, footer, or
-  sitemap — same pattern as `/owner/` and `/admin/`).
-- Currently assigned cars only: open `car_manager_assignments` rows (`end_date IS NULL`).
-  Year, make, model, color, plate, and VIN.
-- Full income and expenses for those cars (the phase 2 product promise).
-- Their own share rate, assignment history, and accrued share, using the existing rule:
-  a trip belongs to whoever managed the car on the trip's start date. Accrual may
-  include trips on cars later reassigned; that is history, not current car access.
+  sitemap — same pattern as `/owner/` and `/admin/`). If the same account also owns
+  cars, `/owner/` stays available as a separate view.
+- Cars they manage, or previously managed, as defined by their
+  `car_manager_assignments` rows. Year, make, model, color, plate, and VIN.
+- Income, expenses, and earnings for those cars **only inside their assignment
+  date ranges** (start inclusive, end exclusive). For an open assignment
+  (`end_date IS NULL`), that includes current data. After a reassignment closes
+  the row, they can still open the car in the manager view, but only for the
+  periods they were the active manager, including earnings for those periods, and
+  nothing after `end_date` (and nothing before `start_date`).
+- Their own share rate, assignment history, and accrued share, using the existing
+  rule: a trip belongs to whoever managed the car on the trip's start date.
 
 **Cannot:**
 
-- `/admin/*` or `/api/portal/admin/*` (403 `not_admin`).
-- Owner-portal car lists or money routes keyed by `cars.owner_id` (403). A manager
-  account has no owned cars, and must not fall through to the owner query.
-- Cars they are not currently assigned, including another manager's cars and
-  unassigned cars (404, same as an owner asking for a car they do not own).
-- Owner name, owner email, or any other owner PII (same rule as the team connector:
-  car JSON may carry `ownerId` only).
+- `/admin/*` or `/api/portal/admin/*` unless the same account is `is_admin` (403
+  `not_admin`).
+- Owner-portal data for a car they do not own. Owner routes stay scoped to
+  `cars.owner_id`. Managing a car does not open the owner statement, and owning
+  a car does not widen the manager date window.
+- Cars they have no assignment for, including another manager's cars (404 on
+  manager APIs, same as an owner asking for a car they do not own).
+- Income, expenses, or earnings on a managed car outside their assignment date
+  ranges, including anything after the assignment ended.
+- Owner name, owner email, or any other owner PII in the manager view (same rule
+  as the team connector: manager car JSON may carry `ownerId` only). The owner
+  view, when this account also owns the car, keeps today's owner-portal fields
+  for that car.
 - Guest data of any kind. Expense notes that look like an email or phone number stay
   rejected.
 - Other managers' accrual, share rates, or assignments.
 - Changing share rates, assignments, owners, or cars.
-- Bank details, payout execution, or reimbursement posting (phase 3).
-- Fleet-wide admin lists and imports.
-
-When an assignment closes, the manager loses current access to that car on the end date
-(exclusive, same as the assignment window). They keep their historical accrual for trips
-whose start date fell in the window.
+- Approving reimbursements, expenses, or payouts (admin-only, including when this
+  account is also an owner). Bank details and payout execution stay out of the
+  manager view. Submitting a reimbursement claim is phase 3; approval is still
+  admin-only.
+- Fleet-wide admin lists and imports, unless the same account is `is_admin`.
 
 ### Authz tests to require (phase 2 implementation)
 
 - Signed out: 401 on manager APIs (login form on `/manager/`).
 - Signed-in owner who is not a manager: 403 on manager APIs.
-- Signed-in manager: 403 `not_admin` on every `/api/portal/admin/*` route, including
-  managers admin and connector docs.
-- Signed-in manager: 403 on `/api/portal/cars` owner routes (no fall-through to
-  `listOwnedCars`).
-- Signed-in manager cannot read or write a car they are not currently assigned,
+- Signed-in manager who is not `is_admin`: 403 `not_admin` on every
+  `/api/portal/admin/*` route, including managers admin and connector docs.
+- Owner APIs stay scoped to `cars.owner_id`; manager APIs stay scoped to this
+  manager's assignment date ranges. An account with both roles: a car they own
+  but do not manage appears only in the owner view; a car they manage but do
+  not own appears only in the manager view, date-scoped; a car they own and
+  manage appears in both, each with that view's scope.
+- Signed-in manager cannot read or write a car they have no assignment for,
   including another manager's car (404).
-- After a reassignment closes their open row, the same car is 404 for current
-  income/expense reads.
-- Session JSON reports the manager role only when `account_id` matches.
-- Admin cannot set `is_admin` on a manager-linked account, and cannot set a manager
-  account as `cars.owner_id`.
-- Duplicate email on manager create is refused.
+- After a reassignment closes their open row, income and expense reads for
+  dates inside the closed window still succeed; dates on or after `end_date`
+  do not.
+- Session JSON reports the manager role only when `account_id` matches, and can
+  report owner and manager together.
+- Linking a manager row does not grant or revoke `is_admin`.
+- Creating a manager with an email that already has a `managers` row is refused.
+  Creating a manager with an email that already belongs to an owner who is not
+  yet a manager links that account.
 - An unlinked phase-1 manager row still cannot authenticate.
 
 ## Later phases (not built)
 
-- Phase 2 (depends on the account link above): manager sign-in; managers see full income
-  and expenses for their currently assigned cars only, under the authz contract in this
-  document.
+- Phase 2 (depends on the account link above): manager sign-in; managers see
+  income, expenses, and earnings for the date ranges they were the active
+  manager, under the authz contract in this document. Owner and manager views
+  stay separate when one account has both roles.
 - Phase 3: reimbursement claims (manager-submitted, admin approve or reject, never auto-posted to
   the owner statement; an admin may create a separate linked owner expense), and recorded
   payouts to managers (share payouts and reimbursements) with payout history and a
   remaining-due balance. Receipt photos stay outside the system (Chris t1717u).
+  Approval stays admin-only, including when the claimant is also an owner.
 
 ## Decisions and open questions
 1. Resolved (Grok, 11/24): fees accrue to whoever managed the car on the trip's start date.
@@ -183,16 +223,19 @@ whose start date fell in the window.
 3. Resolved (Chris, 5:22 PM ET 11/24): managers earn a share on all cars, including
    Panamerica-owned ones. This matches the build: the statement code computes a fee on every
    car, and the share follows it.
-4. Open: can one person be both a car owner and a manager (same email)? Recommendation: no.
-   One account, one role. Revisit only if a real person needs both.
+4. Resolved (Chris, 8:52 PM ET 11/24, t1733u; clarified 8:53 PM ET, t1734u): one person
+   can be both a car owner and a manager on the same account. Owner and manager views
+   stay separate, each scoped to its own data. A manager may manage their own car.
+   Approvals of reimbursements, expenses, and payouts are admin-only, so both roles on
+   one account create no approval conflict.
 5. Open: reuse `/owner/invite/` for manager password setup, or add a `/manager/invite/`
    shell that calls the same invite API?
 6. Open: once every existing manager row is linked, should a follow-up migration make
    `account_id` NOT NULL?
-7. Open: after a car is reassigned away, should the manager still open that car's
-   income/expense pages for the dates they managed it, or only see those trips inside
-   their accrued-share history? Recommendation: accrual history only; current car pages
-   follow the open assignment.
+7. Resolved (Chris, 8:52 PM ET 11/24, t1733u): after a car is reassigned, the old
+   manager sees that car's data only for the date ranges they were the active manager
+   (`car_manager_assignments`, start inclusive, end exclusive), including earnings for
+   those periods, and nothing after.
 
 ## Apply (after Grok's go, not part of a docs PR)
 Phase 1: `npx wrangler d1 execute panamerica-portal --remote --file=migrations/0008_managers.sql`,
