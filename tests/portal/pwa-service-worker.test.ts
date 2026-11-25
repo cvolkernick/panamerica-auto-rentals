@@ -58,8 +58,8 @@ function handled(path: string, init: { method?: string; mode?: string; range?: b
   return responded;
 }
 
-test("sw never handles /api/ requests", () => {
-  for (const path of ["/api/portal/session", "/api/portal/admin/cars", "/api/anything"]) {
+test("sw never handles /api or /api/ requests", () => {
+  for (const path of ["/api", "/api?x=1", "/api/", "/api/portal/session", "/api/portal/admin/cars", "/api/anything"]) {
     assert.equal(handled(path, { mode: "cors" }), false, path);
     assert.equal(handled(path, { mode: "navigate" }), false, path);
     assert.equal(handled(path, { method: "POST", mode: "cors" }), false, path);

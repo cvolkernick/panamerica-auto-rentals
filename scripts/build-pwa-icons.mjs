@@ -10,7 +10,7 @@
  *   icon-maskable-512.png  512×512  purpose "maskable" (art scaled into the
  *                          80% safe zone on the art's edge navy)
  *
- * Uses sharp, which ships with Next.js. If sharp cannot load, the 512 source
+ * Uses sharp (a direct devDependency; Next.js also ships it). If sharp cannot load, the 512 source
  * is copied for every icon so the build never fails; tests/build/pwa.test.ts
  * checks the real sizes and fails CI in that case.
  */

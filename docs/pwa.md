@@ -17,7 +17,7 @@ The public site can be installed to a phone or desktop home screen
 
 ## What the worker does and never does
 
-- **Never** handles `/api/*`, `/owner*`, `/manager*`, `/admin*` (including invite
+- **Never** handles `/api` and `/api/*`, `/owner*`, `/manager*`, `/admin*` (including invite
   pages), non-GET, cross-origin or range (video) requests. Those go to the
   network exactly as without a worker. No portal or signed-in data is cached.
 - Public page navigations: network-first; a good copy is kept for offline use;
