@@ -418,7 +418,14 @@ describe("owner invite links", () => {
     assert.doesNotMatch(page, /body:\s*\{[^}]*password/);
     const admin = readFileSync("app/admin/admin-portal.tsx", "utf8");
     assert.match(admin, /Create invite link/);
-    assert.match(admin, /"Copy"/);
+    // Owners and managers share one invite-link panel (link, 72-hour note, Copy).
+    const panel = readFileSync("components/portal/invite-link.tsx", "utf8");
+    assert.match(panel, /"Copy"/);
+    assert.match(panel, /expires in 72 hours/);
+    assert.doesNotMatch(panel, /console\./);
+    for (const path of ["app/admin/admin-portal.tsx", "app/admin/managers/managers-admin.tsx"]) {
+      assert.match(readFileSync(path, "utf8"), /InviteLinkPanel/, path);
+    }
     const card = readFileSync("app/owner/owner-portal.tsx", "utf8");
     assert.match(card, /min-w-0/);
     assert.match(card, /wrap-anywhere/);

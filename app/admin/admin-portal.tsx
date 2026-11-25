@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
 
 import { portalRequest } from "@/components/portal/api";
+import { InviteLinkPanel, useInviteLinks } from "@/components/portal/invite-link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -16,7 +17,7 @@ import {
   portalInputClass,
 } from "@/components/portal/ui";
 import { carAdminHref } from "@/lib/portal/car-path";
-import type { CarJson, OwnerJson, PortalErrorJson, SessionJson } from "@/lib/portal/types";
+import type { AdminAccountJson, CarJson, OwnerJson, PortalErrorJson, SessionJson } from "@/lib/portal/types";
 import { parseCarCreate, parseCarPatch, parseOwnerCreate, parseOwnerPatch } from "@/lib/portal/validate";
 
 const primaryButton =
@@ -59,10 +60,23 @@ function fieldsFrom(error: PortalErrorJson | null): Record<string, string> {
   return error?.fields ?? {};
 }
 
+/** Accounts without the owner role (today: manager-only logins). Older servers send no roles. */
+function hasOwnerRole(account: AdminAccountJson): boolean {
+  return account.roles?.owner !== false;
+}
+
+function roleLabel(account: AdminAccountJson): string {
+  const parts: string[] = [];
+  if (account.storedAdmin) parts.push("Admin");
+  if (hasOwnerRole(account)) parts.push("Owner");
+  if (account.roles?.manager) parts.push("Manager");
+  return parts.join(" · ");
+}
+
 export function AdminPortal() {
   const [gate, setGate] = useState<Gate>({ kind: "loading" });
   const [email, setEmail] = useState("");
-  const [owners, setOwners] = useState<OwnerJson[]>([]);
+  const [owners, setOwners] = useState<AdminAccountJson[]>([]);
   const [cars, setCars] = useState<CarJson[]>([]);
   const [ownerForm, setOwnerForm] = useState<OwnerForm>(emptyOwner);
   const [ownerId, setOwnerId] = useState<number | null>(null);
@@ -73,8 +87,10 @@ export function AdminPortal() {
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
-  const [inviteOwnerId, setInviteOwnerId] = useState<number | null>(null);
-  const [invites, setInvites] = useState<Record<number, { url: string; copied: boolean }>>({});
+  const inviteLinks = useInviteLinks();
+  const [ownerMode, setOwnerMode] = useState<"new" | "existing">("new");
+  const [existingForm, setExistingForm] = useState({ accountId: "", confirm: false });
+  const [existingErrors, setExistingErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -99,7 +115,7 @@ export function AdminPortal() {
         return;
       }
       const [ownerResult, carResult] = await Promise.all([
-        portalRequest<{ owners: OwnerJson[] }>("/api/portal/admin/owners"),
+        portalRequest<{ owners: AdminAccountJson[] }>("/api/portal/admin/owners"),
         portalRequest<{ cars: CarJson[] }>("/api/portal/admin/cars"),
       ]);
       if (cancelled) return;
@@ -180,29 +196,49 @@ export function AdminPortal() {
   }
 
   async function createInvite(id: number) {
-    setInviteOwnerId(id);
     setMessage("");
-    const result = await portalRequest<{ url: string; expiresAt: string }>(
-      `/api/portal/admin/owners/${id}/invite`,
-      { method: "POST" }
-    );
-    setInviteOwnerId(null);
-    const url = result.data?.url;
-    if (!result.ok || !url) {
-      setMessage("Could not create an invite link.");
-      return;
-    }
-    setInvites((current) => ({ ...current, [id]: { url, copied: false } }));
+    const result = await inviteLinks.create(id, `/api/portal/admin/owners/${id}/invite`);
+    if (!result.ok || !result.data?.url) setMessage("Could not create an invite link.");
   }
 
-  async function copyInvite(id: number, url: string) {
-    try {
-      await navigator.clipboard.writeText(url);
-    } catch {
-      setMessage("Select the link and copy it.");
+  async function copyInvite(id: number) {
+    if (!(await inviteLinks.copy(id))) setMessage("Select the link and copy it.");
+  }
+
+  /** Existing account: the admin picks the exact account and confirms it. No email matching. */
+  async function addOwnerRole(event: FormEvent) {
+    event.preventDefault();
+    if (!/^[1-9]\d*$/.test(existingForm.accountId) || !existingForm.confirm) {
+      setExistingErrors({
+        accountId: /^[1-9]\d*$/.test(existingForm.accountId) ? "" : "Choose the account.",
+        confirm: existingForm.confirm ? "" : "Confirm this exact account before adding the owner role.",
+      });
       return;
     }
-    setInvites((current) => ({ ...current, [id]: { url, copied: true } }));
+    setSaving(true);
+    setMessage("");
+    const accountId = existingForm.accountId;
+    const result = await portalRequest<{ owner: AdminAccountJson }>(
+      `/api/portal/admin/owners/${accountId}/owner-role`,
+      { method: "POST", body: { confirm: true } }
+    );
+    setSaving(false);
+    if (!result.ok) {
+      setExistingErrors(fieldsFrom(result.error));
+      setMessage(
+        result.error?.reason === "migration_pending"
+          ? "The owner role cannot be added yet (database update pending). Add their car below instead; owning a car makes them an owner."
+          : "Could not add the owner role."
+      );
+      return;
+    }
+    setExistingForm({ accountId: "", confirm: false });
+    setExistingErrors({});
+    setOwnerMode("new");
+    setCarId(null);
+    setCarForm({ ...emptyCar(), ownerId: accountId });
+    setMessage("Owner role added. They keep their current login. Their car can be added below.");
+    setReloadToken((value) => value + 1);
   }
 
   async function removeCar(id: number) {
@@ -309,6 +345,79 @@ export function AdminPortal() {
 
       <section className="mt-14">
         <h2 className="text-2xl font-bold text-white">Owners</h2>
+        {ownerId ? null : (
+          <div className="mt-6 flex flex-wrap gap-3" role="group" aria-label="Add owner from">
+            <Button
+              type="button"
+              variant="outline"
+              aria-pressed={ownerMode === "new"}
+              className={`${secondaryButton} ${ownerMode === "new" ? "bg-white/10" : ""}`}
+              onClick={() => setOwnerMode("new")}
+            >
+              New account
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              aria-pressed={ownerMode === "existing"}
+              className={`${secondaryButton} ${ownerMode === "existing" ? "bg-white/10" : ""}`}
+              onClick={() => setOwnerMode("existing")}
+            >
+              Existing account
+            </Button>
+          </div>
+        )}
+        {ownerMode === "existing" && !ownerId ? (
+          <form
+            className="mt-8 grid gap-5 rounded-xl bg-navy-mid p-5 ring-1 ring-white/10 sm:p-8"
+            onSubmit={addOwnerRole}
+          >
+            <p className="text-sm leading-relaxed text-white/70">
+              For someone who already signs in (for example, a manager who buys a car). Choose that
+              exact account and confirm it. They keep their login and password. An email match never
+              adds a role.
+            </p>
+            <PortalField id="existing-account" label="Account" error={existingErrors.accountId}>
+              <select
+                id="existing-account"
+                value={existingForm.accountId}
+                onChange={(event) => setExistingForm({ accountId: event.target.value, confirm: false })}
+                className={selectClass}
+              >
+                <option value="">Choose an account</option>
+                {owners
+                  .filter((account) => !hasOwnerRole(account))
+                  .map((account) => (
+                    <option key={account.id} value={String(account.id)}>
+                      {account.name} · {account.email} (#{account.id}) · {roleLabel(account)}
+                    </option>
+                  ))}
+              </select>
+            </PortalField>
+            <label className="flex items-start gap-3 text-sm text-white/80">
+              <input
+                type="checkbox"
+                disabled={!existingForm.accountId}
+                checked={existingForm.confirm}
+                onChange={(event) => setExistingForm({ ...existingForm, confirm: event.target.checked })}
+              />
+              <span>
+                {(() => {
+                  const chosen = owners.find((account) => String(account.id) === existingForm.accountId);
+                  return chosen
+                    ? `I confirm ${chosen.name} (${chosen.email}, #${chosen.id}) is this owner.`
+                    : "Choose an account, then confirm it.";
+                })()}
+              </span>
+            </label>
+            {existingErrors.confirm ? <p className="text-sm text-white/80">{existingErrors.confirm}</p> : null}
+            <div>
+              <Button type="submit" className={primaryButton} disabled={saving}>
+                Add owner role
+              </Button>
+            </div>
+          </form>
+        ) : (
         <form
           className="mt-8 grid gap-5 rounded-xl bg-navy-mid p-5 ring-1 ring-white/10 sm:p-8"
           onSubmit={saveOwner}
@@ -368,15 +477,16 @@ export function AdminPortal() {
             ) : null}
           </div>
         </form>
+        )}
         <ul className="mt-10 grid gap-6 sm:grid-cols-2">
-          {owners.map((owner) => {
-            const invite = invites[owner.id];
+          {owners.filter(hasOwnerRole).map((owner) => {
+            const invite = inviteLinks.invites[owner.id];
             return (
               <li key={owner.id} className="min-w-0 rounded-xl bg-navy-mid p-6 ring-1 ring-white/10">
                 <h3 className="text-2xl font-bold text-white">{owner.name}</h3>
                 <p className="mt-3 text-base leading-relaxed text-white/80">{owner.email}</p>
                 <p className="mt-2 text-sm leading-relaxed text-white/70">
-                  {owner.storedAdmin ? "Admin" : "Owner"}
+                  {roleLabel(owner)}
                   {owner.isAdmin && !owner.storedAdmin ? " (also set on the server)" : ""}
                 </p>
                 <div className="mt-6 flex flex-wrap gap-x-4 gap-y-2">
@@ -400,28 +510,14 @@ export function AdminPortal() {
                     type="button"
                     variant="outline"
                     className={secondaryButton}
-                    disabled={inviteOwnerId === owner.id}
+                    disabled={inviteLinks.pendingId === owner.id}
                     onClick={() => createInvite(owner.id)}
                   >
-                    {inviteOwnerId === owner.id ? "Creating link" : "Create invite link"}
+                    {inviteLinks.pendingId === owner.id ? "Creating link" : "Create invite link"}
                   </Button>
                 </div>
                 {invite ? (
-                  <div className="mt-4 min-w-0">
-                    <p className="text-sm leading-relaxed text-white/70">
-                      This link works once and expires in 72 hours. Copy it now. It will not be
-                      shown again.
-                    </p>
-                    <p className="mt-3 break-all text-sm leading-relaxed text-white">{invite.url}</p>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className={`mt-4 ${secondaryButton}`}
-                      onClick={() => copyInvite(owner.id, invite.url)}
-                    >
-                      {invite.copied ? "Copied" : "Copy"}
-                    </Button>
-                  </div>
+                  <InviteLinkPanel url={invite.url} copied={invite.copied} onCopy={() => copyInvite(owner.id)} />
                 ) : null}
               </li>
             );
@@ -443,7 +539,9 @@ export function AdminPortal() {
               className={selectClass}
             >
               <option value="">Choose an owner</option>
-              {owners.map((owner) => (
+              {owners
+                .filter((owner) => hasOwnerRole(owner) || String(owner.id) === carForm.ownerId)
+                .map((owner) => (
                 <option key={owner.id} value={owner.id}>
                   {owner.name}
                 </option>
