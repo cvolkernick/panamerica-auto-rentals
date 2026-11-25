@@ -28,25 +28,26 @@ Spec: Chris t1702u (11/24 1:16 AM ET). Phase 1 is built.
   date, change a manager's share with a start date, see rate history, accrued share by month,
   per-trip rate and share, and assignment history.
 
-A manager in this phase is a name row only. It is not linked to a portal login account.
-That link is the phase 2 prerequisite below; it is not built yet.
+A manager in phase 1 was a name row only. Phase 2 (below) links each manager to a portal
+login account and adds the read-only manager view.
 
 ### API (admin session + CSRF only)
 | Method | Path | Body |
 | --- | --- | --- |
 | GET | `/api/portal/admin/managers` | |
-| POST | `/api/portal/admin/managers` | `{ name, shareBps, effectiveFrom }` (seeds the first rate) |
+| POST | `/api/portal/admin/managers` | `{ name, email, shareBps, effectiveFrom }` (new login account + first rate; phase 2) |
 | GET / PATCH | `/api/portal/admin/managers/:id` | `{ name }` (shareBps is refused) |
 | GET / POST | `/api/portal/admin/managers/:id/rates` | `{ shareBps, effectiveFrom }`, after the latest rate |
 | GET / POST | `/api/portal/admin/cars/:id/managers` | `{ managerId \| null, startDate }` |
 | POST | `/api/portal/admin/cars/:id/managers/undo` | |
 
-## Phase 2 prerequisite: tie managers to portal login accounts (not built)
+## Phase 2 prerequisite: tie managers to portal login accounts (built, see "Phase 2 build" below)
 
 Chris t1732u (11/24 8:33 PM ET): managers should be tied to login accounts. Every manager
 should be able to sign in with their account and have the manager role. Today a manager is
 a flat name value on `managers`, not an account. This section is the prerequisite for
-phase 2 sign-in and scoped car access. This PR is docs only: no migration and no code.
+phase 2 sign-in and scoped car access. Spec merged in #34; implemented in the phase 2 build
+PR (issue #33).
 
 Phase 2 is **read-only except auth**. After sign-in, manager APIs and `/manager/` only
 read assigned-car income, expenses, earnings, statements, and assignment or rate
@@ -238,9 +239,50 @@ auth, as stated above.
   or linking when that `owner_id` already has a `managers` row is refused.
 - An unlinked phase-1 manager row still cannot authenticate.
 
+## Phase 2 build (issue #33)
+
+Migration `0009_manager_accounts.sql`: nullable `managers.account_id` (FK to `owners.id`,
+`ON DELETE RESTRICT`) plus partial unique index `idx_managers_account_id`. No NOT NULL, no data.
+
+### Admin API additions (admin session + CSRF only)
+| Method | Path | Body | Notes |
+| --- | --- | --- | --- |
+| POST | `/api/portal/admin/managers` | `{ name, email, shareBps, effectiveFrom }` | Email required. 409 `email_has_account` if the email already has an account; nothing is linked. |
+| POST | `/api/portal/admin/managers/:id/account` | `{ email }` | Unlinked row only. New account (`is_admin = 0`) + link in one batch. Same 409 for an existing email. |
+| POST | `/api/portal/admin/managers/:id/link` | `{ ownerId, confirm: true }` | Explicit link to that exact existing account. An `email` field is refused. 409 `account_has_manager` / `manager_already_linked`. |
+| POST | `/api/portal/admin/managers/:id/invite` | | `createOwnerInvite` with a `/manager/invite/?t=` link. 409 `manager_not_linked`, or `account_has_password` (they sign in as today). |
+
+`POST /api/portal/invite` accepts an optional `email`. When present it must match the invite's
+account, or the request fails as `invite_invalid` (same as used or expired) and the token is
+not consumed. Both invite pages send it.
+
+### Session roles
+`GET /api/portal/session` and `POST /api/portal/login` add
+`roles: { admin, owner, manager }` and `managerId`. `manager` is true only when a managers
+row has `account_id` = this account. `owner` is true when the account owns at least one car,
+or is not a manager (an owner account with no cars yet keeps today's owner view). `admin` is
+the existing effective admin flag.
+
+### Manager API (signed-in manager; GET only; anything else is 405)
+| Path | Returns |
+| --- | --- |
+| `/api/portal/manager` | own name, share, rate history, assignments, accrued share |
+| `/api/portal/manager/cars` | cars with any assignment row for this manager, with `windows` and openable `months` |
+| `/api/portal/manager/cars/:id` | one such car (404 if never assigned to this manager) |
+| `/api/portal/manager/cars/:id/statement?month=YYYY-MM` | trips (with fee and share), expenses, totals inside the windows; 404 `outside_assignment` if the month has no day in a window |
+| `/api/portal/manager/cars/:id/ledger[?month=]` | car ledger rows inside the windows, excluding `payout` rows |
+
+401 signed out; 403 `not_manager` for an account with no linked managers row. Car JSON is
+year, make, model, color, plate, VIN, and `ownerId` only (no owner join). Trip rows carry no
+external trip id.
+
+Pages: `/manager/` (sign-in shell, noindex, not in nav, footer, or sitemap) and
+`/manager/invite/` (same `InvitePortal` as `/owner/invite/`). `_routes.json`, `_headers`,
+`robots.ts`, and the apex redirect include `/manager`.
+
 ## Later phases (not built)
 
-- Phase 2 (depends on the account link above): manager sign-in; managers see
+- Phase 2 (built, issue #33): manager sign-in; managers see
   income, expenses, and earnings for the date ranges they were the active
   manager, under the authz contract in this document. Owner and manager views
   stay separate when one account has both roles. Phase 2 is read-only except
@@ -277,7 +319,14 @@ Phase 1: `npx wrangler d1 execute panamerica-portal --remote --file=migrations/0
 after a fresh `d1 export` backup. Additive only (three new tables, no change to existing ones);
 rollback is `DROP TABLE car_manager_assignments; DROP TABLE manager_share_rates; DROP TABLE managers;`.
 
-The account-link migration is specified in the phase 2 prerequisite above. It is not in this
-PR. Apply it only with a later implementation PR, after a fresh export backup, a D1 Time
-Travel bookmark, and a read-only check that `managers.account_id` does not already exist,
-and never from a deploy step.
+Phase 2: `migrations/0009_manager_accounts.sql`, only after Grok's go, never from a deploy step:
+1. Fresh backup: `npx wrangler d1 export panamerica-portal --remote --output=<backup dir>/pre-0009.sql`
+   (outside the repo, chmod 600).
+2. Time Travel bookmark: `npx wrangler d1 time-travel info panamerica-portal` and record it.
+3. Read-only pre-check: `npx wrangler d1 execute panamerica-portal --remote --command="SELECT COUNT(*) AS n FROM pragma_table_info('managers') WHERE name = 'account_id'"`.
+   Stop if `n` is 1.
+4. Apply only 0009: `npx wrangler d1 execute panamerica-portal --remote --file=migrations/0009_manager_accounts.sql`.
+5. Deploy the code after the column exists (the new code reads `account_id`).
+
+Rollback: `DROP INDEX idx_managers_account_id; ALTER TABLE managers DROP COLUMN account_id;`
+(or restore the Time Travel bookmark). Never drop `managers` or the other phase-1 tables.

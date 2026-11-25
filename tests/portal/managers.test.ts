@@ -185,11 +185,15 @@ describe("assignment rules", () => {
     assert.equal(parseAssignment({ managerId: 0, startDate: "2026-11-01" }).ok, false);
     assert.equal(parseAssignment({ managerId: 1, startDate: "2026-02-30" }).ok, false);
     const d = "2026-11-01";
-    assert.equal(parseManagerCreate({ name: "Ana", shareBps: 1000, effectiveFrom: d }).ok, true);
-    assert.equal(parseManagerCreate({ name: "Ana", shareBps: 1000 }).ok, false);
-    assert.equal(parseManagerCreate({ name: "Ana", shareBps: 10001, effectiveFrom: d }).ok, false);
-    assert.equal(parseManagerCreate({ name: "ana@example.com", shareBps: 1000, effectiveFrom: d }).ok, false);
-    assert.equal(parseManagerCreate({ name: "Ana 239-555-0101", shareBps: 1000, effectiveFrom: d }).ok, false);
+    const email = "ana@example.com";
+    assert.equal(parseManagerCreate({ name: "Ana", email, shareBps: 1000, effectiveFrom: d }).ok, true);
+    // Name-only creates are refused going forward (phase 2 prerequisite): an email is required.
+    assert.equal(parseManagerCreate({ name: "Ana", shareBps: 1000, effectiveFrom: d }).ok, false);
+    assert.equal(parseManagerCreate({ name: "Ana", email: "not-an-email", shareBps: 1000, effectiveFrom: d }).ok, false);
+    assert.equal(parseManagerCreate({ name: "Ana", email, shareBps: 1000 }).ok, false);
+    assert.equal(parseManagerCreate({ name: "Ana", email, shareBps: 10001, effectiveFrom: d }).ok, false);
+    assert.equal(parseManagerCreate({ name: "ana@example.com", email, shareBps: 1000, effectiveFrom: d }).ok, false);
+    assert.equal(parseManagerCreate({ name: "Ana 239-555-0101", email, shareBps: 1000, effectiveFrom: d }).ok, false);
     assert.equal(parseManagerPatch({ shareBps: 1000 }).ok, false);
     assert.equal(parseManagerPatch({ name: "Ana B" }).ok, true);
     assert.equal(parseRateCreate({ shareBps: 1500, effectiveFrom: "2026-11-31" }).ok, false);
@@ -246,12 +250,12 @@ describe("manager admin routes", () => {
     const carA = await seedCar(env, "TEST001", "1HGCM82633A004352");
     const carB = await seedCar(env, "TEST002", "2HGCM82633A004353");
 
-    const ana = await call(env, "POST", "/api/portal/admin/managers", { name: "Ana Test", shareBps: 2500, effectiveFrom: "2026-11-01" });
+    const ana = await call(env, "POST", "/api/portal/admin/managers", { name: "Ana Test", email: "ana.test@example.com", shareBps: 2500, effectiveFrom: "2026-11-01" });
     assert.equal(ana.status, 201);
     const anaId = (ana.data?.manager as { id: number }).id;
-    const ben = await call(env, "POST", "/api/portal/admin/managers", { name: "Ben Test", shareBps: 1000, effectiveFrom: "2026-11-01" });
+    const ben = await call(env, "POST", "/api/portal/admin/managers", { name: "Ben Test", email: "ben.test@example.com", shareBps: 1000, effectiveFrom: "2026-11-01" });
     const benId = (ben.data?.manager as { id: number }).id;
-    const dup = await call(env, "POST", "/api/portal/admin/managers", { name: "ana test", shareBps: 1, effectiveFrom: "2026-11-01" });
+    const dup = await call(env, "POST", "/api/portal/admin/managers", { name: "ana test", email: "ana.dup@example.com", shareBps: 1, effectiveFrom: "2026-11-01" });
     assert.equal(dup.status, 409);
 
     // A manager can't have a car before their first share rate starts.
@@ -369,7 +373,7 @@ describe("share rate history and atomic assignment writes", () => {
   test("a later % change leaves earlier trips' accrued share exactly as it was", async () => {
     const env = devEnv(PANAMERICA);
     const car = await seedCar(env, "TEST010", "4HGCM82633A004355");
-    const created = await call(env, "POST", "/api/portal/admin/managers", { name: "Cleo Test", shareBps: 1000, effectiveFrom: "2026-10-01" });
+    const created = await call(env, "POST", "/api/portal/admin/managers", { name: "Cleo Test", email: "cleo.test@example.com", shareBps: 1000, effectiveFrom: "2026-10-01" });
     const id = (created.data?.manager as { id: number }).id;
     await call(env, "POST", `/api/portal/admin/cars/${car}/managers`, { managerId: id, startDate: "2026-10-01" });
     // Oct 3-day $500 ($100 fee), Nov 10-day $1,000 ($150 fee), both before the change.
@@ -430,8 +434,8 @@ describe("share rate history and atomic assignment writes", () => {
 
   async function setupTwo(env: PortalEnv) {
     const car = await seedCar(env, "TEST020", "5HGCM82633A004356");
-    const a = (await call(env, "POST", "/api/portal/admin/managers", { name: "Dee Test", shareBps: 1000, effectiveFrom: "2026-10-01" })).data?.manager as { id: number };
-    const b = (await call(env, "POST", "/api/portal/admin/managers", { name: "Eli Test", shareBps: 1000, effectiveFrom: "2026-10-01" })).data?.manager as { id: number };
+    const a = (await call(env, "POST", "/api/portal/admin/managers", { name: "Dee Test", email: "dee.test@example.com", shareBps: 1000, effectiveFrom: "2026-10-01" })).data?.manager as { id: number };
+    const b = (await call(env, "POST", "/api/portal/admin/managers", { name: "Eli Test", email: "eli.test@example.com", shareBps: 1000, effectiveFrom: "2026-10-01" })).data?.manager as { id: number };
     assert.equal((await call(env, "POST", `/api/portal/admin/cars/${car}/managers`, { managerId: a.id, startDate: "2026-11-01" })).status, 201);
     return { car, a: a.id, b: b.id };
   }
@@ -467,7 +471,7 @@ describe("share rate history and atomic assignment writes", () => {
   test("creating a manager: if the first rate insert fails, no manager row is left behind", async () => {
     const env = devEnv(PANAMERICA);
     const broken = failingDb(env, /INSERT INTO manager_share_rates/);
-    assert.equal((await call(broken, "POST", "/api/portal/admin/managers", { name: "Fay Test", shareBps: 1000, effectiveFrom: "2026-10-01" })).status, 500);
+    assert.equal((await call(broken, "POST", "/api/portal/admin/managers", { name: "Fay Test", email: "fay.test@example.com", shareBps: 1000, effectiveFrom: "2026-10-01" })).status, 500);
     const list = await call(env, "GET", "/api/portal/admin/managers");
     assert.deepEqual(list.data?.managers, []);
   });
