@@ -17,8 +17,8 @@ export type ConnectorTool = {
 
 export const CONNECTOR_DOC = {
   title: "Team connector (MCP)",
-  updated: "2026-11-24",
-  version: "FE-4 (PR #29)",
+  updated: "2026-11-25",
+  version: "FE-4 + manager lookup",
 } as const;
 
 /** Per-entry ceiling for expenses and income, in cents. Must equal MAX_ENTRY_CENTS in team-store.ts. */
@@ -87,6 +87,16 @@ export const CONNECTOR_TOOLS: readonly ConnectorTool[] = [
     summary: "Read a car's monthly statement: income, expenses, fee, balance, payout due.",
   },
   {
+    name: "panam_get_car_manager",
+    access: "read",
+    summary: "Read who manages a car today: manager name, since date, contact reference, and company or client owned.",
+  },
+  {
+    name: "panam_list_car_managers",
+    access: "read",
+    summary: "Read today's manager for every car, to route car questions to the right person.",
+  },
+  {
     name: "panam_get_write_log",
     access: "read",
     summary: "Read recent connector writes with the agent name, action, before and after.",
@@ -99,6 +109,8 @@ export const CONNECTOR_NOT_SUPPORTED: readonly string[] = [
   "Commission expenses. The management fee is figured by the statement from trip income.",
   "Editing, recategorizing, or deleting commission rows (admin only).",
   "Owner names, emails, or any other owner PII. Cars carry the owner id only.",
+  "Manager emails or phone numbers. The manager lookup gives a contact reference only.",
+  "Assigning or changing a car's manager (admin only).",
   "Guest data of any kind. Expense notes with an email or phone number are refused.",
   "Entries over $50,000 per expense or income entry.",
   "Editing or deleting imported Turo or Wheelbase trips. Fix those with a corrected re-import.",

@@ -1,5 +1,8 @@
 import { randomToken } from "./codec";
 import type { D1Prepared, PortalD1 } from "./d1";
+import { adminEmailSet } from "./db";
+import type { PortalEnv } from "./env";
+import { isMissingAccountColumn } from "./managers";
 
 /** Platform label for income entered through the team connector. Imports never use it. */
 export const MANUAL_PLATFORM = "manual";
@@ -320,4 +323,110 @@ export function deleteManualIncomeStatement(db: PortalD1, carId: number, id: num
   return db
     .prepare(`DELETE FROM trips WHERE id = ? AND car_id = ? AND platform = ?`)
     .bind(id, carId, MANUAL_PLATFORM);
+}
+
+/**
+ * Car-to-manager lookup for the team connector (read-only).
+ *
+ * The current manager is the car_manager_assignments row that covers `today`
+ * (America/New_York): start_date <= today AND (end_date IS NULL OR end_date > today).
+ * start_date is inclusive and end_date exclusive, the same rule as assignmentCovers()
+ * in managers.ts. owner_type is "company" when the car's owner is an admin account
+ * (stored is_admin or ADMIN_EMAILS, as effectiveAdmin() in db.ts), otherwise "client".
+ *
+ * Never returns owner names, owner emails, manager emails, or phone numbers. The owner
+ * email is read only to evaluate ADMIN_EMAILS and is dropped before the JSON is built.
+ * contact_ref is an opaque "manager:<id>" key that callers map to a contact themselves.
+ */
+type CarManagerRow = {
+  car_id: number;
+  owner_is_admin: number | null;
+  owner_email: string | null;
+  manager_id: number | null;
+  manager_name: string | null;
+  start_date: string | null;
+  account_id: number | null;
+};
+
+export type TeamManagerJson = {
+  id: number;
+  name: string;
+  since: string;
+  contact_ref: string;
+  has_portal_account: boolean;
+};
+
+export type TeamCarManagerJson = {
+  car_id: number;
+  manager: TeamManagerJson | null;
+  owner_type: "company" | "client";
+};
+
+function carManagerSql(withAccount: boolean, oneCar: boolean): string {
+  return `SELECT c.id AS car_id, o.is_admin AS owner_is_admin, o.email AS owner_email,
+       a.manager_id AS manager_id, m.name AS manager_name, a.start_date AS start_date,
+       ${withAccount ? "m.account_id" : "NULL"} AS account_id
+  FROM cars c
+  LEFT JOIN owners o ON o.id = c.owner_id
+  LEFT JOIN car_manager_assignments a
+    ON a.car_id = c.id AND a.start_date <= ? AND (a.end_date IS NULL OR a.end_date > ?)
+  LEFT JOIN managers m ON m.id = a.manager_id
+  ${oneCar ? "WHERE c.id = ?" : ""}
+  ORDER BY c.id, a.start_date DESC, a.id DESC`;
+}
+
+async function carManagerRows(db: PortalD1, today: string, carId?: number): Promise<CarManagerRow[]> {
+  const binds: unknown[] = carId === undefined ? [today, today] : [today, today, carId];
+  const run = (withAccount: boolean) =>
+    db
+      .prepare(carManagerSql(withAccount, carId !== undefined))
+      .bind(...binds)
+      .all<CarManagerRow>();
+  try {
+    return (await run(true)).results;
+  } catch (error) {
+    // Before migration 0009 there is no managers.account_id: report no portal accounts.
+    if (isMissingAccountColumn(error)) return (await run(false)).results;
+    throw error;
+  }
+}
+
+function carManagerJson(row: CarManagerRow, admins: Set<string>): TeamCarManagerJson {
+  const company =
+    Number(row.owner_is_admin) === 1 || admins.has((row.owner_email ?? "").trim().toLowerCase());
+  const manager =
+    row.manager_id === null || row.manager_id === undefined || !row.manager_name || !row.start_date
+      ? null
+      : {
+          id: Number(row.manager_id),
+          name: row.manager_name,
+          since: row.start_date,
+          contact_ref: `manager:${Number(row.manager_id)}`,
+          has_portal_account: row.account_id !== null && row.account_id !== undefined,
+        };
+  return { car_id: Number(row.car_id), manager, owner_type: company ? "company" : "client" };
+}
+
+/** One row per car: the first (latest-starting) covering assignment wins. */
+export async function listCarManagers(db: PortalD1, env: PortalEnv, today: string): Promise<TeamCarManagerJson[]> {
+  const admins = adminEmailSet(env);
+  const seen = new Set<number>();
+  const out: TeamCarManagerJson[] = [];
+  for (const row of await carManagerRows(db, today)) {
+    const id = Number(row.car_id);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push(carManagerJson(row, admins));
+  }
+  return out;
+}
+
+export async function getCarManager(
+  db: PortalD1,
+  env: PortalEnv,
+  carId: number,
+  today: string
+): Promise<TeamCarManagerJson | null> {
+  const rows = await carManagerRows(db, today, carId);
+  return rows.length ? carManagerJson(rows[0], adminEmailSet(env)) : null;
 }
