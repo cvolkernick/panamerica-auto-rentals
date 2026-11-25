@@ -28,7 +28,11 @@ function tokenFromLocation(): string {
   return token;
 }
 
-export function InvitePortal() {
+/**
+ * One-time invite page. /owner/invite/ and /manager/invite/ share this shell and the same
+ * GET/POST /api/portal/invite API; only the sign-in link after saving differs.
+ */
+export function InvitePortal({ signInHref = "/owner/" }: { signInHref?: "/owner/" | "/manager/" } = {}) {
   const [gate, setGate] = useState<Gate>({ kind: "loading" });
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -85,7 +89,8 @@ export function InvitePortal() {
     }
     const result = await portalRequest("/api/portal/invite", {
       method: "POST",
-      body: { token: gate.token, derived },
+      // The email the GET showed: a token issued for another account fails like a used one.
+      body: { token: gate.token, derived, email: gate.info.email },
     });
     setSubmitting(false);
     setPassword("");
@@ -151,7 +156,7 @@ export function InvitePortal() {
         lede="Sign in with your email and the password you chose."
       >
         <Link
-          href="/owner/"
+          href={signInHref}
           className="mt-6 inline-block font-heading text-sm tracking-[0.16em] text-gold uppercase hover:text-white"
         >
           Sign in
