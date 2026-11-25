@@ -22,6 +22,12 @@
 /admin/*
   X-Robots-Tag: noindex
 
+/sign-in/
+  X-Robots-Tag: noindex
+
+/sign-in/*
+  X-Robots-Tag: noindex
+
 /api/portal/*
   X-Robots-Tag: noindex
   X-Content-Type-Options: nosniff
