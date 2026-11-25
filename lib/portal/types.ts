@@ -104,6 +104,9 @@ export type CarJson = {
 };
 
 /** Every role that applies to the signed-in account. Owner and manager can both be true. */
+/** Admin owners list row: the account plus its owner and manager roles (admin-only JSON). */
+export type AdminAccountJson = OwnerJson & { roles?: { owner: boolean; manager: boolean } };
+
 export type SessionRoles = {
   roles: { admin: boolean; owner: boolean; manager: boolean };
   /** Set only when a managers row has account_id = this account. */
