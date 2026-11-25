@@ -1,4 +1,5 @@
 import {
+  getPasswordHash,
   carJson,
   countStoredAdmins,
   deleteCar,
@@ -30,11 +31,12 @@ import { connectorCapabilitiesJson } from "./connector-capabilities";
 import type { PortalD1 } from "./d1";
 import type { PortalEnv } from "./env";
 import { portalApexRedirect } from "./hosts";
-import { forbidden, json, readJson, validationError } from "./http";
+import { forbidden, json, readJson, readOptionalJson, validationError } from "./http";
 import { createOwnerInvite, handleInvite } from "./invite";
 import { ledgerTotals, monthBounds } from "./ledger";
 import { authenticate, handleLogin, handleLogout, handleSetupPassword, requireCsrf } from "./login";
 import { routeAdminManagers } from "./manager-routes";
+import { findManagerRole } from "./managers";
 import { isManagerPath, routeManager } from "./manager-view";
 import { accountRoleMap, grantOwnerRole } from "./owner-role";
 import { accountRoles } from "./roles";
@@ -359,6 +361,12 @@ async function routeAdmin(
     const id = parsePathId(inviteMatch[1]);
     if (id === null) return notFound();
     if (method !== "POST") return methodNotAllowed("POST");
+    // A dual-role account (also a manager) that already has a password: a new link would replace
+    // that password, so it needs an explicit { reset: true }, the same rule as the managers route.
+    if ((await getPasswordHash(db, id)) && (await findManagerRole(db, id))) {
+      const options = await readOptionalJson(request);
+      if (options?.reset !== true) return json({ error: "conflict", reason: "account_has_password" }, 409);
+    }
     return createOwnerInvite(db, id);
   }
 
@@ -374,6 +382,10 @@ async function routeAdmin(
     const body = await readJson(request);
     if (!body.ok) return body.response;
     const record = body.value as Record<string, unknown> | null;
+    if (record && typeof record === "object" && "email" in record) {
+      // The account comes only from the admin's explicit pick, never from an email.
+      return validationError({ email: "Add the owner role by the confirmed account id, not by email." });
+    }
     if (!record || typeof record !== "object" || record.confirm !== true) {
       return validationError({ confirm: "Confirm this exact account before adding the owner role." });
     }

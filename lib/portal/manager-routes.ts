@@ -18,7 +18,7 @@
  */
 import { getCarById, getOwnerByEmail, getOwnerById, getPasswordHash, uniqueField } from "./db";
 import type { PortalD1 } from "./d1";
-import { json, readJson, validationError } from "./http";
+import { json, readJson, readOptionalJson, validationError } from "./http";
 import { createOwnerInvite, MANAGER_INVITE_URL_PREFIX } from "./invite";
 import { todayEastern } from "./ledger";
 import {
@@ -75,18 +75,6 @@ function parsePathId(raw: string): number | null {
 function duplicateName(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return /UNIQUE/i.test(message) && /managers\.name|name/i.test(message);
-}
-
-/** Body is optional on the invite route: empty or invalid JSON reads as no options. */
-async function readOptionalJson(request: Request): Promise<Record<string, unknown> | null> {
-  const text = await request.text().catch(() => "");
-  if (!text.trim() || text.length > 10_000) return null;
-  try {
-    const value = JSON.parse(text) as unknown;
-    return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
-  } catch {
-    return null;
-  }
 }
 
 function accountConflict(): Response {
