@@ -5,6 +5,13 @@ Server side of the car connector MCP (`tools/car-connector-mcp`). See that READM
 - Auth: `Authorization: Bearer <PORTAL_TEAM_TOKEN>` (Pages secret, 32+ chars; unset = 404)
   and `X-Agent-Name` (1-80 chars, percent-encoded). Cookie sessions never reach these
   routes, and the token never opens `/api/portal/admin/*`.
+- Read-only token (optional): `Authorization: Bearer <PORTAL_TEAM_READ_TOKEN>` (Pages secret,
+  32+ chars). It opens every `GET` route below. Any other method answers
+  `403 {"error":"read_only_token"}` before any D1 read or `team_write_log` row. Unset, empty
+  or short means it never matches (a blank Bearer is a 401). Both tokens are compared in
+  constant time on every request. The full token is unchanged, and the API still needs
+  `PORTAL_TEAM_TOKEN` set to be enabled at all. `/whoami` reports `tokenScope`
+  (`full` or `read`) and the matching `scope` list.
 - `X-Agent-Name` is self-asserted: a label for the write log, never an authorization input.
 - Every write and its `team_write_log` row (migration 0007: agent name, action, car id,
   entity id, before/after JSON) run in one D1 batch, so a write never lands unlogged.
@@ -20,7 +27,7 @@ Server side of the car connector MCP (`tools/car-connector-mcp`). See that READM
 
 | Method | Path | Notes |
 |--------|------|-------|
-| GET | `/whoami` | agent name and scope |
+| GET | `/whoami` | agent name, `tokenScope` (`full`/`read`) and scope list |
 | GET | `/cars` | owner email removed |
 | GET, PATCH | `/cars/:id` | PATCH: year, make, model, color, licensePlate, vin. No ownerId. No DELETE. |
 | GET, POST | `/cars/:id/expenses` | `?month=YYYY-MM`. No `commission`; no emails or phone numbers in notes. |

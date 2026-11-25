@@ -164,3 +164,31 @@ def test_manager_tools_are_registered_and_read_only():
     assert {"panam_get_car_manager", "panam_list_car_managers"} <= set(tools)
     assert set(tools["panam_get_car_manager"].inputSchema.get("properties", {})) == {"car_id"}
     assert set(tools["panam_list_car_managers"].inputSchema.get("properties", {})) == set()
+
+
+READ_ONLY_403 = {"error": "read_only_token", "reason": "This token is read-only. Only GET is allowed."}
+
+
+@pytest.mark.parametrize("call", [
+    lambda t: pm.update_car(2, {"color": "Blue"}, transport=t),
+    lambda t: pm.add_expense(2, "2026-11-20", "maintenance", 4599, "Oil change", transport=t),
+    lambda t: pm.update_expense(2, 5, amount_cents=4800, transport=t),
+    lambda t: pm.delete_expense(2, 5, transport=t),
+    lambda t: pm.add_income(2, "2026-11-01", "2026-11-03", 25000, transport=t),
+    lambda t: pm.update_income(2, 7, payout_cents=26000, transport=t),
+    lambda t: pm.delete_income(2, 7, transport=t),
+])
+def test_write_with_read_only_token_is_a_clean_error(call):
+    seen = []
+    with pytest.raises(pm.CarConnectorError) as ei:
+        call(_transport(403, READ_ONLY_403, seen))
+    msg = str(ei.value)
+    assert "read-only" in msg and "Nothing was saved" in msg
+    assert TOKEN not in msg
+    assert len(seen) == 1 and seen[0].method in ("POST", "PATCH", "DELETE")
+
+
+def test_other_403_keeps_the_generic_message():
+    with pytest.raises(pm.CarConnectorError, match="HTTP 403") as ei:
+        pm.update_income(2, 7, payout_cents=1, transport=_transport(403, {"error": "imported_trip"}))
+    assert "read-only" not in str(ei.value)

@@ -84,6 +84,16 @@ python3 -m venv ~/.venvs/panam-car-mcp
 The server side reads the same secret as `PORTAL_TEAM_TOKEN` (a Pages secret). Unset
 or shorter than 32 characters means `/api/portal/team` answers 404.
 
+### Read-only token
+
+An agent that should only read gets the read-only token (`PORTAL_TEAM_READ_TOKEN` on the
+server) in its token file instead. It works with every read tool (cars, expenses, income,
+statements, write log, manager lookup). A write tool called with it raises
+`CarConnectorError` ("this team token is read-only, so writes are not allowed. Nothing was
+saved.") from the server's 403 `read_only_token`. The token never appears in the error. Nothing
+is written and no log row is added. Check which token a session has with `GET /whoami`
+(`tokenScope`: `full` or `read`).
+
 ## Register it
 
 ```json

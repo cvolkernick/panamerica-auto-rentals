@@ -97,6 +97,14 @@ def _check_cents(name: str, value: Any, *, positive: bool = True) -> None:
         raise CarConnectorError(f"{name} is over the per-entry cap of {MAX_ENTRY_CENTS} cents")
 
 
+def _error_code(resp: httpx.Response) -> str | None:
+    try:
+        body = resp.json()
+    except ValueError:
+        return None
+    return body.get("error") if isinstance(body, dict) else None
+
+
 def request(method: str, path: str, *, params: dict | None = None, body: dict | None = None,
             transport: httpx.BaseTransport | None = None) -> Any:
     """Call the team API and return the decoded JSON."""
@@ -121,6 +129,11 @@ def request(method: str, path: str, *, params: dict | None = None, body: dict | 
         ) from None
     if resp.status_code == 401:
         raise CarConnectorError("Portal returned 401 Unauthorized: team token missing, wrong or rotated")
+    if resp.status_code == 403 and _error_code(resp) == "read_only_token":
+        raise CarConnectorError(
+            f"Portal refused {method} {path}: this team token is read-only, so writes are not allowed. "
+            "Nothing was saved."
+        )
     if resp.status_code == 404 and path in ("/cars", "/whoami"):
         raise CarConnectorError("Portal returned 404: the team connector is not enabled on this deploy")
     if resp.status_code >= 400:
