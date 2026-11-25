@@ -56,6 +56,7 @@ export type AssignmentRow = {
 export type ManagerWrite = { name: string; email: string; shareBps: number; effectiveFrom: string };
 export type AccountWrite = { email: string };
 export type LinkWrite = { ownerId: number };
+export type ManagerFromAccountWrite = { name: string; ownerId: number; shareBps: number; effectiveFrom: string };
 export type ManagerPatch = { name: string };
 export type RateWrite = { shareBps: number; effectiveFrom: string };
 export type AssignmentWrite = { managerId: number | null; startDate: string };
@@ -191,6 +192,30 @@ export function parseAccountLink(body: unknown): Parsed<LinkWrite> {
   if (body.confirm !== true) fields.confirm = "Confirm this exact account before linking.";
   if (Object.keys(fields).length > 0 || ownerId === undefined) return { ok: false, fields };
   return { ok: true, value: { ownerId } };
+}
+
+/**
+ * New manager on an existing login account (for example an owner who also manages):
+ * { name, ownerId, confirm: true, shareBps, effectiveFrom }. Same rule as parseAccountLink: an
+ * email is refused, so the account always comes from the admin's explicit, confirmed pick.
+ */
+export function parseManagerFromAccount(body: unknown): Parsed<ManagerFromAccountWrite> {
+  if (!isRecord(body)) return { ok: false, fields: { body: "Send a JSON object." } };
+  const link = parseAccountLink(body);
+  const fields: FieldErrors = link.ok ? {} : { ...link.fields };
+  const name = parseName(body.name, fields);
+  const shareBps = parseShareBps(body.shareBps, fields);
+  const effectiveFrom = parseEffectiveFrom(body.effectiveFrom, fields);
+  if (
+    !link.ok ||
+    Object.keys(fields).length > 0 ||
+    name === undefined ||
+    shareBps === undefined ||
+    effectiveFrom === undefined
+  ) {
+    return { ok: false, fields };
+  }
+  return { ok: true, value: { name, ownerId: link.value.ownerId, shareBps, effectiveFrom } };
 }
 
 /** Name only. The share changes through a dated rate (parseRateCreate), never in place. */
@@ -487,6 +512,31 @@ export async function insertManager(db: PortalD1, write: ManagerWrite, actorId: 
     ]
   );
   const row = await db.prepare(`SELECT id FROM managers WHERE name = ?`).bind(write.name).first<{ id: number }>();
+  if (!row) throw new Error("manager_insert_failed");
+  return Number(row.id);
+}
+
+/**
+ * Manager row linked to an existing account + first rate, as one D1 batch. No new login and no
+ * admin change. The account_id unique index fails the batch if the account already manages.
+ */
+export async function insertManagerForAccount(
+  db: PortalD1,
+  write: ManagerFromAccountWrite,
+  actorId: number
+): Promise<number> {
+  await runAll(db, [
+    db
+      .prepare(`INSERT INTO managers (name, account_id, created_by) VALUES (?, ?, ?)`)
+      .bind(write.name, write.ownerId, actorId),
+    db
+      .prepare(
+        `INSERT INTO manager_share_rates (manager_id, share_bps, effective_from, created_by)
+         SELECT id, ?, ?, ? FROM managers WHERE account_id = ?`
+      )
+      .bind(write.shareBps, write.effectiveFrom, actorId, write.ownerId),
+  ]);
+  const row = await db.prepare(`SELECT id FROM managers WHERE account_id = ?`).bind(write.ownerId).first<{ id: number }>();
   if (!row) throw new Error("manager_insert_failed");
   return Number(row.id);
 }

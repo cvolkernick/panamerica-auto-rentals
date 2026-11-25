@@ -36,6 +36,7 @@ import { ledgerTotals, monthBounds } from "./ledger";
 import { authenticate, handleLogin, handleLogout, handleSetupPassword, requireCsrf } from "./login";
 import { routeAdminManagers } from "./manager-routes";
 import { isManagerPath, routeManager } from "./manager-view";
+import { accountRoleMap, grantOwnerRole } from "./owner-role";
 import { accountRoles } from "./roles";
 import { routeAdminMoney, routeOwnerMoney } from "./money-routes";
 import { handleTeam, isTeamPath } from "./team";
@@ -89,7 +90,10 @@ async function withUnique(fn: () => Promise<Response>): Promise<Response> {
       return json(
         {
           error: "conflict",
-          fields: { email: "An owner with this email already exists." },
+          fields: {
+            email:
+              "That email already has a portal account. It was not linked. To make it an owner, choose it under Existing account and confirm.",
+          },
         },
         409
       );
@@ -327,8 +331,13 @@ async function routeAdmin(
 
   if (path === "/api/portal/admin/owners") {
     if (method === "GET") {
-      const owners = await listOwners(db);
-      return json({ owners: owners.map((row) => ownerJson(row, env)) });
+      const [owners, roles] = await Promise.all([listOwners(db), accountRoleMap(db)]);
+      return json({
+        owners: owners.map((row) => ({
+          ...ownerJson(row, env),
+          roles: roles.get(Number(row.id)) ?? { owner: true, manager: false },
+        })),
+      });
     }
     if (method === "POST") {
       const body = await readJson(request);
@@ -351,6 +360,31 @@ async function routeAdmin(
     if (id === null) return notFound();
     if (method !== "POST") return methodNotAllowed("POST");
     return createOwnerInvite(db, id);
+  }
+
+  // Add the owner role to an existing account (for example a manager who buys a car). The admin
+  // picks the exact account id and confirms it; an email match never grants anything.
+  const roleMatch = path.match(/^\/api\/portal\/admin\/owners\/([1-9]\d*)\/owner-role$/);
+  if (roleMatch) {
+    const id = parsePathId(roleMatch[1]);
+    if (id === null) return notFound();
+    if (method !== "POST") return methodNotAllowed("POST");
+    const row = await getOwnerById(db, id);
+    if (!row) return notFound();
+    const body = await readJson(request);
+    if (!body.ok) return body.response;
+    const record = body.value as Record<string, unknown> | null;
+    if (!record || typeof record !== "object" || record.confirm !== true) {
+      return validationError({ confirm: "Confirm this exact account before adding the owner role." });
+    }
+    const before = (await accountRoleMap(db)).get(id);
+    if (!before?.owner) {
+      const granted = await grantOwnerRole(db, id);
+      if (granted === "migration_pending") return json({ error: "conflict", reason: "migration_pending" }, 409);
+      if (granted === "not_found") return notFound();
+    }
+    const roles = (await accountRoleMap(db)).get(id) ?? { owner: true, manager: false };
+    return json({ owner: { ...ownerJson(row, env), roles } });
   }
 
   const ownerMatch = path.match(/^\/api\/portal\/admin\/owners\/([1-9]\d*)$/);

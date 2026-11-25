@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, type FormEvent } from "react";
+import { Fragment, useEffect, useState, type FormEvent } from "react";
 
 import { portalRequest } from "@/components/portal/api";
+import { InviteLinkPanel, useInviteLinks } from "@/components/portal/invite-link";
 import {
   PortalField,
   PortalForbidden,
@@ -78,7 +79,10 @@ export function ManagersAdmin() {
   const [form, setForm] = useState({ name: "", email: "", percent: "", effectiveFrom: todayEastern() });
   const [accountForm, setAccountForm] = useState({ email: "", ownerId: "", confirm: false });
   const [accountErrors, setAccountErrors] = useState<Record<string, string>>({});
-  const [inviteUrl, setInviteUrl] = useState("");
+  const inviteLinks = useInviteLinks();
+  const [addedId, setAddedId] = useState<number | null>(null);
+  const [addMode, setAddMode] = useState<"new" | "existing">("new");
+  const [pick, setPick] = useState({ ownerId: "", confirm: false });
   const [rateForm, setRateForm] = useState({ percent: "", effectiveFrom: todayEastern() });
   const [rateErrors, setRateErrors] = useState<Record<string, string>>({});
   const [editId, setEditId] = useState<number | null>(null);
@@ -134,7 +138,6 @@ export function ManagersAdmin() {
       if (result.data.manager.id !== detail?.manager.id) {
         setAccountForm({ email: "", ownerId: "", confirm: false });
         setAccountErrors({});
-        setInviteUrl("");
       }
       setDetail(result.data);
     } else setMessage("Could not load that manager.");
@@ -145,7 +148,10 @@ export function ManagersAdmin() {
     const shareBps = percentToBps(form.percent);
     const next: Record<string, string> = {};
     if (!form.name.trim()) next.name = "Enter a name.";
-    if (!editId && !form.email.trim()) next.email = "Enter the manager's email. It becomes their sign-in.";
+    const existing = !editId && addMode === "existing";
+    if (!editId && !existing && !form.email.trim()) next.email = "Enter the manager's email. It becomes their sign-in.";
+    if (existing && !/^[1-9]\d*$/.test(pick.ownerId)) next.ownerId = "Choose the account.";
+    if (existing && !pick.confirm) next.confirm = "Confirm this exact account before adding the manager.";
     if (!editId && shareBps === null) next.shareBps = "Enter a percent from 0 to 100, up to two decimals.";
     if (Object.keys(next).length) return setErrors(next);
     setSaving(true);
@@ -156,21 +162,45 @@ export function ManagersAdmin() {
         ? { method: "PATCH", body: { name: form.name } }
         : {
             method: "POST",
-            body: { name: form.name, email: form.email, shareBps, effectiveFrom: form.effectiveFrom },
+            body: existing
+              ? { name: form.name, ownerId: Number(pick.ownerId), confirm: true, shareBps, effectiveFrom: form.effectiveFrom }
+              : { name: form.name, email: form.email, shareBps, effectiveFrom: form.effectiveFrom },
           }
     );
     setSaving(false);
     if (!result.ok) {
       setErrors(fieldsFrom(result.error));
-      return setMessage("Could not save the manager.");
+      return setMessage(
+        result.error?.reason === "account_has_manager"
+          ? "That account is already linked to another manager."
+          : result.error?.reason === "email_has_account"
+            ? "That email already has a portal account. It was not linked. To use it, choose Existing account and confirm it."
+            : "Could not save the manager."
+      );
+    }
+    if (existing) {
+      setErrors({});
+      setForm({ name: "", email: "", percent: "", effectiveFrom: todayEastern() });
+      setPick({ ownerId: "", confirm: false });
+      setAddMode("new");
+      setMessage("Manager added on the existing login. They sign in as usual and open /manager/.");
+      return setReloadToken((value) => value + 1);
     }
     setErrors({});
     setForm({ name: "", email: "", percent: "", effectiveFrom: todayEastern() });
-    setMessage(
-      editId
-        ? "Manager saved."
-        : "Manager added with a new login. Open Details to make their one-time invite link."
-    );
+    const createdId = !editId ? result.data?.manager.id : undefined;
+    if (createdId) {
+      // Same as owners: the new login gets a one-time invite link right away.
+      setAddedId(createdId);
+      const invited = await inviteManager(createdId);
+      setMessage(
+        invited
+          ? "Manager added with a new login. Copy the invite link below and send it to them. They set their password from it, then sign in at /manager/."
+          : "Manager added with a new login, but the invite link was not made. Use Invite link in the list to try again."
+      );
+    } else {
+      setMessage("Manager saved.");
+    }
     if (editId && detail?.manager.id === editId) await openDetail(editId);
     setEditId(null);
     setReloadToken((value) => value + 1);
@@ -234,32 +264,52 @@ export function ManagersAdmin() {
     setAccountErrors({});
     setAccountForm({ email: "", ownerId: "", confirm: false });
     setDetail(result.data);
-    setMessage(action === "account" ? "Login created. Make an invite link next." : "Account linked.");
+    if (action === "account") {
+      const invited = await inviteManager(result.data.manager.id);
+      setMessage(
+        invited
+          ? "Login created. Copy the invite link below and send it to them."
+          : "Login created, but the invite link was not made. Use Create invite link to try again."
+      );
+    } else setMessage("Account linked.");
     setReloadToken((v) => v + 1);
+  }
+
+  /** Same token, expiry, and "a new link replaces older unused ones" rule as owner invites. */
+  async function inviteManager(id: number): Promise<boolean> {
+    setSaving(true);
+    const path = `/api/portal/admin/managers/${id}/invite`;
+    let result = await inviteLinks.create(id, path);
+    if (!result.ok && result.error?.reason === "account_has_password") {
+      const reset = window.confirm(
+        "This login already has a password and can sign in at /manager/. Make a new invite link anyway? Once used, it replaces their current password."
+      );
+      if (reset) result = await inviteLinks.create(id, path, { reset: true });
+      else {
+        setSaving(false);
+        setMessage("No link made. They sign in as usual and open /manager/.");
+        return false;
+      }
+    }
+    setSaving(false);
+    if (!result.ok || !result.data) {
+      const reason = result.error?.reason;
+      setMessage(reason === "manager_not_linked" ? "Set up a login first." : "Could not make an invite link.");
+      return false;
+    }
+    return true;
   }
 
   async function makeInvite() {
     if (!detail) return;
-    setSaving(true);
     setMessage("");
-    setInviteUrl("");
-    const result = await portalRequest<{ url: string; expiresAt: string }>(
-      `/api/portal/admin/managers/${detail.manager.id}/invite`,
-      { method: "POST" }
-    );
-    setSaving(false);
-    if (!result.ok || !result.data) {
-      const reason = result.error?.reason;
-      return setMessage(
-        reason === "account_has_password"
-          ? "This account already has a password. They sign in as usual and open /manager/."
-          : reason === "manager_not_linked"
-            ? "Set up a login first."
-            : "Could not make an invite link."
-      );
+    if (await inviteManager(detail.manager.id)) {
+      setMessage("Invite link made. It works once and expires in 72 hours. Send it to the manager directly.");
     }
-    setInviteUrl(result.data.url);
-    setMessage("Invite link made. It works once and expires in 72 hours. Send it to the manager directly.");
+  }
+
+  async function copyInvite(id: number) {
+    if (!(await inviteLinks.copy(id))) setMessage("Select the link and copy it.");
   }
 
   function assignFor(carId: number) {
@@ -364,7 +414,8 @@ export function ManagersAdmin() {
               </thead>
               <tbody>
                 {managers.map((m) => (
-                  <tr key={m.id} className="border-t border-white/10">
+                  <Fragment key={m.id}>
+                  <tr className="border-t border-white/10">
                     <td className={td}>{m.name}</td>
                     <td className={`${td} wrap-anywhere`}>{m.accountEmail ?? "Not linked"}</td>
                     <td className={td}>
@@ -399,15 +450,115 @@ export function ManagersAdmin() {
                       >
                         Edit
                       </button>
+                      {m.accountId !== null ? (
+                        <>
+                          {" "}
+                          ·{" "}
+                          <button
+                            type="button"
+                            className="text-gold hover:underline"
+                            disabled={saving}
+                            onClick={async () => {
+                              setMessage("");
+                              setAddedId(null);
+                              await inviteManager(m.id);
+                            }}
+                          >
+                            {inviteLinks.pendingId === m.id ? "Creating link" : "Invite link"}
+                          </button>
+                        </>
+                      ) : null}
                     </td>
                   </tr>
+                  {inviteLinks.invites[m.id] && addedId !== m.id && detail?.manager.id !== m.id ? (
+                    <tr>
+                      <td colSpan={8} className="pb-4">
+                        <InviteLinkPanel
+                          url={inviteLinks.invites[m.id].url}
+                          copied={inviteLinks.invites[m.id].copied}
+                          onCopy={() => copyInvite(m.id)}
+                        />
+                      </td>
+                    </tr>
+                  ) : null}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
           )}
         </div>
 
+        {editId ? null : (
+          <div className="mt-6 flex flex-wrap gap-3" role="group" aria-label="Add manager from">
+            <Button
+              type="button"
+              variant="outline"
+              aria-pressed={addMode === "new"}
+              className={`${secondaryButton} ${addMode === "new" ? "bg-white/10" : ""}`}
+              onClick={() => setAddMode("new")}
+            >
+              New login
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              aria-pressed={addMode === "existing"}
+              className={`${secondaryButton} ${addMode === "existing" ? "bg-white/10" : ""}`}
+              onClick={() => setAddMode("existing")}
+            >
+              Existing account
+            </Button>
+          </div>
+        )}
         <form className={`mt-6 grid gap-5 sm:grid-cols-[2fr_2fr_1fr_1fr_auto] sm:items-end ${card}`} onSubmit={saveManager}>
+          {!editId && addMode === "existing" ? (
+            <div className="grid gap-3 sm:col-span-5">
+              <p className="text-sm leading-relaxed text-white/70">
+                For someone who already signs in (for example, an owner who also manages). Choose that exact
+                account and confirm it. They keep their login and password. An email match never links an account.
+                An owner with no car yet shows as manager-only until their car is added or the owner role is
+                added again on the Owners page.
+              </p>
+              <PortalField id="manager-account" label="Account" error={errors.ownerId}>
+                <select
+                  id="manager-account"
+                  className={selectClass}
+                  value={pick.ownerId}
+                  onChange={(e) => {
+                    const chosen = accounts.find((a) => String(a.id) === e.target.value);
+                    setPick({ ownerId: e.target.value, confirm: false });
+                    if (chosen && !form.name.trim()) setForm({ ...form, name: chosen.name });
+                  }}
+                >
+                  <option value="">Choose an account</option>
+                  {accounts
+                    .filter((a) => !managers.some((m) => m.accountId === a.id))
+                    .map((a) => (
+                      <option key={a.id} value={String(a.id)}>
+                        {a.name} · {a.email} (#{a.id})
+                      </option>
+                    ))}
+                </select>
+              </PortalField>
+              <label className="flex items-start gap-3 text-sm text-white/80">
+                <input
+                  type="checkbox"
+                  disabled={!pick.ownerId}
+                  checked={pick.confirm}
+                  onChange={(e) => setPick({ ...pick, confirm: e.target.checked })}
+                />
+                <span>
+                  {(() => {
+                    const chosen = accounts.find((a) => String(a.id) === pick.ownerId);
+                    return chosen
+                      ? `I confirm ${chosen.name} (${chosen.email}, #${chosen.id}) is this manager.`
+                      : "Choose an account, then confirm it.";
+                  })()}
+                </span>
+              </label>
+              {errors.confirm ? <p className="text-sm text-white/80">{errors.confirm}</p> : null}
+            </div>
+          ) : null}
           <PortalField id="manager-name" label={editId ? "Edit name" : "New manager name"} error={errors.name}>
             <Input
               id="manager-name"
@@ -423,6 +574,9 @@ export function ManagersAdmin() {
             </p>
           ) : (
             <>
+              {addMode === "existing" ? (
+                <p className="text-sm leading-relaxed text-white/60">Signs in with the chosen account.</p>
+              ) : (
               <PortalField id="manager-email" label="Sign-in email" error={errors.email}>
                 <Input
                   id="manager-email"
@@ -434,6 +588,7 @@ export function ManagersAdmin() {
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
                 />
               </PortalField>
+              )}
           <PortalField id="manager-share" label="Share of company fee (%)" error={errors.shareBps}>
               <Input
                 id="manager-share"
@@ -475,6 +630,18 @@ export function ManagersAdmin() {
             ) : null}
           </div>
         </form>
+        {addedId !== null && inviteLinks.invites[addedId] ? (
+          <div className={`mt-6 ${card}`}>
+            <h3 className="font-heading text-sm tracking-[0.16em] text-gold uppercase">
+              Invite link for {managers.find((m) => m.id === addedId)?.name ?? "the new manager"}
+            </h3>
+            <InviteLinkPanel
+              url={inviteLinks.invites[addedId].url}
+              copied={inviteLinks.invites[addedId].copied}
+              onCopy={() => copyInvite(addedId)}
+            />
+          </div>
+        ) : null}
       </section>
 
       <section className="mt-14" aria-labelledby="assign-title">
@@ -560,11 +727,15 @@ export function ManagersAdmin() {
                 </p>
                 <div>
                   <Button type="button" variant="outline" className={secondaryButton} disabled={saving} onClick={makeInvite}>
-                    Make invite link
+                    {inviteLinks.pendingId === detail.manager.id ? "Creating link" : "Create invite link"}
                   </Button>
                 </div>
-                {inviteUrl ? (
-                  <Input readOnly aria-label="Invite link" className={portalInputClass} value={inviteUrl} onFocus={(e) => e.currentTarget.select()} />
+                {inviteLinks.invites[detail.manager.id] ? (
+                  <InviteLinkPanel
+                    url={inviteLinks.invites[detail.manager.id].url}
+                    copied={inviteLinks.invites[detail.manager.id].copied}
+                    onCopy={() => copyInvite(detail.manager.id)}
+                  />
                 ) : null}
               </div>
             ) : (

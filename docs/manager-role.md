@@ -107,9 +107,12 @@ passwords, hashes, or invite tokens in this repo or in docs.
    `POST /api/portal/admin/owners/:id/invite` or a thin wrapper
    `POST /api/portal/admin/managers/:id/invite` that calls the same `createOwnerInvite`
    helper. The token is stored as SHA-256 only, 72-hour TTL, older unused invites marked
-   used, same as owners. Skip the invite when the account already has a password
-   (an explicitly linked existing owner); they can sign in as they do today and use
-   `/manager/` once the row is linked.
+   used, same as owners. The admin page makes the link right after "Add manager" (new
+   login) and shows it with the same Copy panel as the owners list; "Invite link" on any
+   linked row makes a fresh one (older unused links stop working). When the account
+   already has a password, the wrapper refuses with `account_has_password` unless the
+   admin sends `{ "reset": true }` after a confirm; using that link replaces the password,
+   exactly like a new owner invite.
 3. When an invite is needed, the manager opens `/manager/invite/` (a shell that
    hits the same `GET`/`POST /api/portal/invite`) and sets a password in the
    browser (Argon2id, as documented in `docs/owner-portal.md`). The Worker stores
@@ -256,11 +259,27 @@ Migration `0009_manager_accounts.sql`: nullable `managers.account_id` (FK to `ow
 account, or the request fails as `invite_invalid` (same as used or expired) and the token is
 not consumed. Both invite pages send it.
 
+### Adding from an existing account (both directions)
+
+- **Manager from an existing account:** `POST /api/portal/admin/managers` with
+  `{ name, ownerId, confirm: true, shareBps, effectiveFrom }` creates the managers row
+  linked to that exact account plus its first rate, in one batch. No new login. An
+  `email` in that body is refused. 409 `account_has_manager` if the account already manages.
+- **Owner from an existing account:** `POST /api/portal/admin/owners/:id/owner-role`
+  with `{ confirm: true }` sets `owners.owner_role = 1` (migration 0010). Use it when a
+  manager-only account buys a car. Adding a car with that account as owner also makes it
+  an owner, since owning a car is part of the rule. Before 0010 is applied the route
+  returns 409 `migration_pending` and every read ignores the flag.
+- `GET /api/portal/admin/owners` adds `roles: { owner, manager }` per account. The
+  admin owners list shows accounts with the owner role; the "Existing account" picker
+  lists the ones without it. Creating a new owner with an email that already has a login
+  is refused and points the admin to "Existing account". No path ever links by email.
+
 ### Session roles
 `GET /api/portal/session` and `POST /api/portal/login` add
 `roles: { admin, owner, manager }` and `managerId`. `manager` is true only when a managers
 row has `account_id` = this account. `owner` is true when the account owns at least one car,
-or is not a manager (an owner account with no cars yet keeps today's owner view). `admin` is
+an admin granted the owner role (`owners.owner_role = 1`, migration 0010), or it is not a manager (an owner account with no cars yet keeps today's owner view). `admin` is
 the existing effective admin flag.
 
 ### Manager API (signed-in manager; GET only; anything else is 405)
