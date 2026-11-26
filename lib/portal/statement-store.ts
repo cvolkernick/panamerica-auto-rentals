@@ -71,10 +71,14 @@ export async function getPayout(db: PortalD1, carId: number, id: number): Promis
     .first<PayoutRow>();
 }
 
+/** Payouts that count: period month on or after the car's ledger start month. */
 export async function listPayouts(db: PortalD1, carId: number): Promise<PayoutRow[]> {
+  const startMonth = (await carLedgerStart(db, carId)).slice(0, 7);
   const result = await db
-    .prepare(`SELECT ${PAYOUT_COLUMNS} FROM payouts WHERE car_id = ? ORDER BY period_month, paid_date, id`)
-    .bind(carId)
+    .prepare(
+      `SELECT ${PAYOUT_COLUMNS} FROM payouts WHERE car_id = ? AND period_month >= ? ORDER BY period_month, paid_date, id`
+    )
+    .bind(carId, startMonth)
     .all<PayoutRow>();
   return result.results;
 }
