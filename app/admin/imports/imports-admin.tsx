@@ -496,6 +496,11 @@ export function ImportsAdmin() {
               Discard preview
             </Button>
           </div>
+          {open.status === "preview" ? (
+            <p className="mt-3 text-sm text-white/70">
+              Preview only, not imported yet. Click Import matched trips to save these trips.
+            </p>
+          ) : null}
           <LineTable
             title="Unmatched"
             rows={review.unmatched}
