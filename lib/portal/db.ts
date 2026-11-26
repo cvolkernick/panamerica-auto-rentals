@@ -2,6 +2,7 @@ import { carIdFromAdminKey, normalizePlateKey } from "./car-path";
 import type { PortalD1 } from "./d1";
 import type { PortalEnv } from "./env";
 import type { LedgerType } from "./ledger";
+import { carLedgerStart, clampToLedgerStart } from "./ledger-start";
 import type { CarJson, LedgerEntryJson, OwnerJson } from "./types";
 import type { CarWrite, LedgerWrite, OwnerWrite } from "./validate";
 
@@ -425,7 +426,7 @@ export type LedgerRow = {
 const LEDGER_COLUMNS =
   "id, car_id, entry_date, type, amount_cents, note, created_at, updated_at, created_by";
 
-const LIST_LEDGER_SQL = `SELECT ${LEDGER_COLUMNS} FROM car_ledger WHERE car_id = ? ORDER BY entry_date DESC, id DESC`;
+const LIST_LEDGER_SQL = `SELECT ${LEDGER_COLUMNS} FROM car_ledger WHERE car_id = ? AND entry_date >= ? ORDER BY entry_date DESC, id DESC`;
 
 const LIST_LEDGER_MONTH_SQL = `SELECT ${LEDGER_COLUMNS} FROM car_ledger WHERE car_id = ? AND entry_date >= ? AND entry_date < ? ORDER BY entry_date DESC, id DESC`;
 
@@ -454,14 +455,17 @@ export async function listLedgerEntries(
   carId: number,
   range?: { start: string; end: string }
 ): Promise<LedgerRow[]> {
+  // Entries before the car's ledger start stay stored but are not listed or totaled.
+  const ledgerStart = await carLedgerStart(db, carId);
   if (range) {
+    const counted = clampToLedgerStart(range, ledgerStart);
     const result = await db
       .prepare(LIST_LEDGER_MONTH_SQL)
-      .bind(carId, range.start, range.end)
+      .bind(carId, counted.start, counted.end)
       .all<LedgerRow>();
     return result.results;
   }
-  const result = await db.prepare(LIST_LEDGER_SQL).bind(carId).all<LedgerRow>();
+  const result = await db.prepare(LIST_LEDGER_SQL).bind(carId, ledgerStart).all<LedgerRow>();
   return result.results;
 }
 
