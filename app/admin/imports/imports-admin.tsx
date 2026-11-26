@@ -446,7 +446,10 @@ export function ImportsAdmin() {
             </PortalField>
           </>
         ) : (
-          <PortalField id="import-file" label="Trip CSV">
+          <PortalField
+            id="import-file"
+            label={platform === "turo" ? "Trip earnings CSV (trip_earnings_export_….csv)" : "Trip CSV"}
+          >
             <Input
               id="import-file"
               type="file"
