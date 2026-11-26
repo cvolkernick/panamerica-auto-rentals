@@ -146,6 +146,8 @@ Confirmed headers only: `Type`, `Reservation URL`, `Vehicle`, `Vehicle ID`, `Dat
 
 Do not build the Turo mapper for this file in this MVP. If a later mapper is added, it needs its own idempotency rules and must drop guest-identifying text.
 
+The Turo mapper and header auto-detect recognize this file (`Type`, `Reservation URL`, `Earnings`, `Payment` present; no `Reservation ID` or `Trip start`) and reject it with a message that names the Trip earnings export and where to get it, instead of a generic missing-columns error.
+
 No official Turo "download your trip earnings" email with a 47-column attachment was found in that inbox. Weekly "Your earnings are on the way!" payout notices are not a trip export.
 
 ### 2.3 Wheelbase — confirmed two-file join (see §§14–15)
