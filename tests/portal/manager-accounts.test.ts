@@ -17,7 +17,7 @@ import { clipWindows, inWindows, windowMonths } from "../../lib/portal/manager-v
 import { isMissingAccountColumn, parseAccountLink } from "../../lib/portal/managers";
 import { SESSION_COOKIE } from "../../lib/portal/session";
 import { createMemoryD1, loadMigrationSql } from "./memory-d1";
-import { call, DEALER, devEnv, PANAMERICA, requireDb } from "./support";
+import { call, DEALER, devEnv, PANAMERICA, requireDb, startLedgerEarly } from "./support";
 
 const MANAGER_EMAIL = "mia.manager@example.com";
 const DUAL_EMAIL = "ariel.dual@example.com";
@@ -661,6 +661,7 @@ describe("manager view authz", () => {
 
   test("a month straddling end_date: earnings, statement, and log rows on or after end_date are omitted", async () => {
     const f = await fleet();
+    await startLedgerEarly(f.env, f.handedOver);
     const mia = as(f.env, MANAGER_EMAIL);
     const ben = as(f.env, OTHER_EMAIL);
     // Inside Mia's window (Oct 1 - Oct 14).
