@@ -20,7 +20,7 @@ import {
   type StatementTripInput,
 } from "../../lib/portal/statement";
 import { parsePayoutCreate } from "../../lib/portal/validate";
-import { call, DEALER, devEnv, PANAMERICA, request, requireDb } from "./support";
+import { call, DEALER, devEnv, PANAMERICA, request, requireDb, startLedgerEarly } from "./support";
 
 function trip(overrides: Partial<StatementTripInput> & { startDate: string }): StatementTripInput {
   return {
@@ -403,6 +403,7 @@ describe("statement API", () => {
     const env = devEnv(PANAMERICA);
     const created = await call(env, "POST", "/api/portal/admin/cars", carBody());
     const carId = (created.data?.car as { id: number }).id;
+    await startLedgerEarly(env, carId);
     await call(env, "POST", `/api/portal/admin/cars/${carId}/expenses`, {
       entryDate: "2025-10-15",
       category: "maintenance",
@@ -449,6 +450,8 @@ describe("statement API", () => {
       vin: "1TSTCAR0000000002",
     }));
     const otherId = (other.data?.car as { id: number }).id;
+    await startLedgerEarly(env, ownId);
+    await startLedgerEarly(env, otherId);
     await importStub(env, [
       "S1,1TSTCAR0000000001,2025-11-03,2025-11-06,10000,,Completed",
       "S2,1TSTCAR0000000002,2025-11-03,2025-11-06,20000,,Completed",
@@ -511,6 +514,7 @@ describe("statement API", () => {
     const env = devEnv(PANAMERICA);
     const created = await call(env, "POST", "/api/portal/admin/cars", carBody());
     const carId = (created.data?.car as { id: number }).id;
+    await startLedgerEarly(env, carId);
     await importStub(env, ["S1,1TSTCAR0000000001,2025-09-03,2025-09-06,10000,,Completed"]);
     const paid = await call(env, "POST", `/api/portal/admin/cars/${carId}/payouts`, {
       periodMonth: "2025-09",

@@ -45,6 +45,22 @@ Code: `lib/portal/statement.ts` (`tripLengthDays`, `feeRateBps`, `managementFeeC
 
 ## 3. Running balance per car per month
 
+### Ledger start (Chris, 11/26 via Grok)
+
+Panamerica started running cars through the portal in November 2026, so every car's money
+starts on **2026-11-01** and November opens at $0.00. Code: `lib/portal/ledger-start.ts`.
+
+- Trips with `start_date`, expenses with `entry_date`, and legacy `car_ledger` rows dated before a
+  car's ledger start, and payouts whose `period_month` is before the start month, stay in the
+  database and are never deleted. No money or report path reads them: statements and their
+  history, opening and closing balances, month, to-date and all-time report totals, the owner
+  view, team connector income and expense lists, and the manager view and accrual.
+- Per car: `cars.ledger_start_date` (migration 0011) is nullable; NULL means the 2026-11-01
+  default, applied in code. The column is read defensively, so the code works before 0011 is
+  applied.
+- Re-importing a pre-start trip still updates its stored row (the import is idempotent), but no
+  balance changes, because nothing that sums money reads it.
+
 Code: `buildStatements` in `lib/portal/statement.ts`. Months are America/New_York calendar
 months. Trips count in their `start_date` month, expenses in their `entry_date` month, payouts in
 their `period_month`.

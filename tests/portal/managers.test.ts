@@ -17,7 +17,7 @@ import {
 } from "../../lib/portal/managers";
 import type { StatementTripInput } from "../../lib/portal/statement";
 import type { PortalEnv } from "../../lib/portal/env";
-import { call, DEALER, devEnv, PANAMERICA, requireDb } from "./support";
+import { call, DEALER, devEnv, PANAMERICA, requireDb, startLedgerEarly } from "./support";
 
 function trip(overrides: Partial<StatementTripInput> & { id: number; startDate: string }): StatementTripInput {
   return {
@@ -373,6 +373,7 @@ describe("share rate history and atomic assignment writes", () => {
   test("a later % change leaves earlier trips' accrued share exactly as it was", async () => {
     const env = devEnv(PANAMERICA);
     const car = await seedCar(env, "TEST010", "4HGCM82633A004355");
+    await startLedgerEarly(env, car);
     const created = await call(env, "POST", "/api/portal/admin/managers", { name: "Cleo Test", email: "cleo.test@example.com", shareBps: 1000, effectiveFrom: "2026-10-01" });
     const id = (created.data?.manager as { id: number }).id;
     await call(env, "POST", `/api/portal/admin/cars/${car}/managers`, { managerId: id, startDate: "2026-10-01" });

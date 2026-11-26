@@ -80,3 +80,12 @@ export async function uploadImport(env: PortalEnv, form: FormData, host?: string
 export function csvFile(name: string, text: string): File {
   return new File([text], name, { type: "text/csv" });
 }
+
+/**
+ * Money counts from each car's ledger start (default 2026-11-01). Tests whose
+ * synthetic dates predate that, and that check fee, carry, or share math rather
+ * than the start itself, move this car's start earlier.
+ */
+export async function startLedgerEarly(env: PortalEnv, carId: number, date = "2000-01-01"): Promise<void> {
+  await requireDb(env).prepare(`UPDATE cars SET ledger_start_date = ? WHERE id = ?`).bind(date, carId).run();
+}

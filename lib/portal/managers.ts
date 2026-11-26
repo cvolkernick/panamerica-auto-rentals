@@ -17,6 +17,7 @@
  */
 import type { PortalD1 } from "./d1";
 import { normalizeLoginEmail } from "./email";
+import { carLedgerStart } from "./ledger-start";
 import { feeForTrip, type StatementTripInput } from "./statement";
 
 export const MANAGER_NAME_MAX = 80;
@@ -848,9 +849,9 @@ export async function tripsForCars(db: PortalD1, carIds: number[]): Promise<Map<
       .prepare(
         `SELECT id, car_id, platform, external_trip_id, start_date, end_date, status, counts_as_income,
                 payout_cents, tax_cents, pending_payout_cents, has_pending
-           FROM trips WHERE car_id = ? ORDER BY start_date, id`
+           FROM trips WHERE car_id = ? AND start_date >= ? ORDER BY start_date, id`
       )
-      .bind(carId)
+      .bind(carId, await carLedgerStart(db, carId))
       .all<TripRow>();
     map.set(
       carId,
