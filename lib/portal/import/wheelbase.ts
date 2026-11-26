@@ -147,7 +147,7 @@ function parseWheelbase(
     return { ok: false, error: "Wheelbase needs both the bookings file and the transactions file." };
   }
   const reservations = parseCsv(input.reservations.text);
-  if (!reservations.ok) return { ok: false, error: `Reservations file: ${reservations.error}` };
+  if (!reservations.ok) return { ok: false, error: `Bookings file: ${reservations.error}` };
   const transactions = parseCsv(input.transactions.text);
   if (!transactions.ok) return { ok: false, error: `Transactions file: ${transactions.error}` };
   const missingReservations = missingHeaders(reservations.table.headers, WHEELBASE_RESERVATION_HEADERS);
