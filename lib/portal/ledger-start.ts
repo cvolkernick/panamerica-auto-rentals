@@ -59,3 +59,31 @@ export function clampToLedgerStart(
   const start = bounds.start > ledgerStart ? bounds.start : ledgerStart;
   return { start, end: start > bounds.end ? start : bounds.end };
 }
+
+/** Error text for a write dated before the car's ledger start. */
+export function beforeLedgerStartMessage(ledgerStart: string): string {
+  return `This date is before this car's ledger start (${ledgerStart}).`;
+}
+
+/**
+ * Expense and payout writes dated before the car's ledger start would be saved
+ * but never count, so they are rejected. Returns validation fields, or null.
+ */
+export async function ledgerStartGuard(
+  db: PortalD1,
+  carId: number,
+  dates: { entryDate?: string; periodMonth?: string; paidDate?: string }
+): Promise<Record<string, string> | null> {
+  const ledgerStart = await carLedgerStart(db, carId);
+  const fields: Record<string, string> = {};
+  if (dates.entryDate !== undefined && dates.entryDate < ledgerStart) {
+    fields.entryDate = beforeLedgerStartMessage(ledgerStart);
+  }
+  if (dates.periodMonth !== undefined && dates.periodMonth < ledgerStart.slice(0, 7)) {
+    fields.periodMonth = beforeLedgerStartMessage(ledgerStart);
+  }
+  if (dates.paidDate !== undefined && dates.paidDate < ledgerStart) {
+    fields.paidDate = beforeLedgerStartMessage(ledgerStart);
+  }
+  return Object.keys(fields).length > 0 ? fields : null;
+}

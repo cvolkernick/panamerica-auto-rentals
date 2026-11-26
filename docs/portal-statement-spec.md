@@ -60,6 +60,9 @@ starts on **2026-11-01** and November opens at $0.00. Code: `lib/portal/ledger-s
   applied.
 - Re-importing a pre-start trip still updates its stored row (the import is idempotent), but no
   balance changes, because nothing that sums money reads it.
+- Admin and team expense writes (create and edit) dated before the car's start, and admin payout
+  writes whose period month or paid date is before it, are rejected with "This date is before this
+  car's ledger start (YYYY-MM-DD)." The payout log lists only payouts on or after the start month.
 
 Code: `buildStatements` in `lib/portal/statement.ts`. Months are America/New_York calendar
 months. Trips count in their `start_date` month, expenses in their `entry_date` month, payouts in

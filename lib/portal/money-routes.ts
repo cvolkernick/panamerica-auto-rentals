@@ -2,6 +2,7 @@ import { getCarById, getOwnedCar } from "./db";
 import type { PortalD1 } from "./d1";
 import { validationError, json, readJson } from "./http";
 import { currentMonthEastern, monthBounds } from "./ledger";
+import { ledgerStartGuard } from "./ledger-start";
 import {
   assignImportLine,
   carMoneyReport,
@@ -406,6 +407,8 @@ export async function routeAdminMoney(
       const parsed = parseExpensePatch(body.value);
       if (!parsed.ok) return validationError(parsed.fields);
       const next = expenseWriteFromRow(existing, parsed.value);
+      const tooEarly = await ledgerStartGuard(db, carId, { entryDate: next.entryDate });
+      if (tooEarly) return validationError(tooEarly);
       try {
         await updateExpense(db, carId, expenseId, next);
       } catch (error) {
@@ -438,6 +441,8 @@ export async function routeAdminMoney(
       if (!body.ok) return body.response;
       const parsed = parseExpenseCreate(body.value);
       if (!parsed.ok) return validationError(parsed.fields);
+      const tooEarly = await ledgerStartGuard(db, carId, { entryDate: parsed.value.entryDate });
+      if (tooEarly) return validationError(tooEarly);
       let id: number;
       try {
         id = await insertExpense(db, carId, parsed.value, actorId);
@@ -479,6 +484,11 @@ export async function routeAdminMoney(
       if (!body.ok) return body.response;
       const parsed = parsePayoutCreate(body.value, currentMonthEastern());
       if (!parsed.ok) return validationError(parsed.fields);
+      const tooEarly = await ledgerStartGuard(db, carId, {
+        periodMonth: parsed.value.periodMonth,
+        paidDate: parsed.value.paidDate,
+      });
+      if (tooEarly) return validationError(tooEarly);
       let id: number;
       try {
         id = await insertPayout(db, carId, parsed.value, actorId);

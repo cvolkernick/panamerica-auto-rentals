@@ -557,6 +557,7 @@ describe("statement API", () => {
     const env = devEnv(PANAMERICA);
     const created = await call(env, "POST", "/api/portal/admin/cars", carBody());
     const carId = (created.data?.car as { id: number }).id;
+    await startLedgerEarly(env, carId);
     const db = requireDb(env);
     const token = randomToken();
     const csrf = randomToken();
