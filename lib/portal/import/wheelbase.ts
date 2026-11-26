@@ -144,7 +144,7 @@ function parseWheelbase(
   input: MapperInput
 ): { ok: true; value: { trips: MappedTrip[]; reviewItems: ReviewItem[] } } | { ok: false; error: string } {
   if (input.file || !input.reservations || !input.transactions) {
-    return { ok: false, error: "Wheelbase needs both the reservations file and the transaction log." };
+    return { ok: false, error: "Wheelbase needs both the bookings file and the transactions file." };
   }
   const reservations = parseCsv(input.reservations.text);
   if (!reservations.ok) return { ok: false, error: `Reservations file: ${reservations.error}` };
