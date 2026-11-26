@@ -32,6 +32,7 @@ import type { PortalEnv } from "./env";
 import { clientIp } from "./hosts";
 import { json, rateLimited, readJson, unauthorized, validationError } from "./http";
 import { currentMonthEastern, monthBounds, todayEastern } from "./ledger";
+import { ledgerStartGuard } from "./ledger-start";
 import { expenseJson, getExpense, listExpenses, type ExpenseRow } from "./money-store";
 import { secretsEqual } from "./secrets";
 import { carStatement } from "./statement-store";
@@ -624,6 +625,8 @@ async function createExpense(
   if (!parsed.ok) return validationError(parsed.fields);
   const guard = expenseGuard(parsed.value);
   if (guard) return validationError(guard);
+  const tooEarly = await ledgerStartGuard(db, carId, { entryDate: parsed.value.entryDate });
+  if (tooEarly) return validationError(tooEarly);
   let ids: number[];
   try {
     ids = await runLogged(
@@ -662,6 +665,8 @@ async function patchExpense(
   const guard = expenseGuard(parsed.value);
   if (guard) return validationError(guard);
   const next = expenseWriteFromRow(existing, parsed.value);
+  const tooEarly = await ledgerStartGuard(db, carId, { entryDate: next.entryDate });
+  if (tooEarly) return validationError(tooEarly);
   const before = expenseJson(existing);
   let ids: number[];
   try {
