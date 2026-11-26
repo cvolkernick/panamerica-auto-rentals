@@ -33,7 +33,18 @@ export const WHEELBASE_KNOWN_TYPES = [
   "Wheelbase Fee Payment",
 ] as const;
 
+/**
+ * A refund shows up as two rows for the same booking and the same Amount.
+ * "Refund" is the renter side (Credit and Debit are both zero). "Reversal" is
+ * the payout clawback: Debit = |Amount| - |CC Fee| - |Wheelbase Fee|, because
+ * the card fee comes back with the refund. Only the Reversal moves money, so a
+ * matched pair is counted once, from the Reversal. Anything that does not pair
+ * cleanly stays in review instead of being guessed.
+ */
+export const WHEELBASE_REFUND_TYPES = ["Refund", "Reversal"] as const;
+
 const KNOWN_TYPES = new Set<string>(WHEELBASE_KNOWN_TYPES);
+const REFUND_TYPES = new Set<string>(WHEELBASE_REFUND_TYPES);
 
 const TRANSACTION_DETAIL_KEYS = [
   "Date",
@@ -124,7 +135,7 @@ function clip(value: string, max: number): string {
   return text.length <= max ? text : text.slice(0, max);
 }
 
-type KnownTxn = {
+export type KnownTxn = {
   bookingId: string;
   credit: number;
   debit: number;
@@ -132,6 +143,74 @@ type KnownTxn = {
   wheelbaseFee: number;
   pending: boolean;
 };
+
+export type RefundTxn = {
+  rowNumber: number;
+  type: "Refund" | "Reversal";
+  amountAbs: number;
+  credit: number;
+  debit: number;
+  ccFee: number;
+  wheelbaseFee: number;
+  pending: boolean;
+  detail: Record<string, string>;
+};
+
+export type RefundReviewReason =
+  | "refund_without_reversal"
+  | "reversal_without_refund"
+  | "refund_reversal_mismatch";
+
+function refundPairIsConsistent(refund: RefundTxn, reversal: RefundTxn): boolean {
+  if (refund.amountAbs <= 0) return false;
+  if (refund.credit !== 0 || refund.debit !== 0) return false;
+  if (Math.abs(refund.ccFee) !== Math.abs(reversal.ccFee)) return false;
+  if (Math.abs(refund.wheelbaseFee) !== Math.abs(reversal.wheelbaseFee)) return false;
+  const clawback = reversal.debit - reversal.credit;
+  return clawback === reversal.amountAbs - Math.abs(reversal.ccFee) - Math.abs(reversal.wheelbaseFee);
+}
+
+/**
+ * Pair Refund rows with Reversal rows of the same Amount, in file order.
+ * A clean pair becomes one money movement taken from the Reversal: its
+ * Credit/Debit feed payout, and its card and Wheelbase fees come off platform
+ * fees. Unpaired or inconsistent rows are returned for review.
+ */
+export function pairWheelbaseRefunds(rows: readonly RefundTxn[]): {
+  applied: Omit<KnownTxn, "bookingId">[];
+  review: { row: RefundTxn; reason: RefundReviewReason }[];
+} {
+  const applied: Omit<KnownTxn, "bookingId">[] = [];
+  const review: { row: RefundTxn; reason: RefundReviewReason }[] = [];
+  const reversals = rows.filter((row) => row.type === "Reversal");
+  const used = new Set<RefundTxn>();
+  for (const refund of rows) {
+    if (refund.type !== "Refund") continue;
+    const reversal = reversals.find((row) => !used.has(row) && row.amountAbs === refund.amountAbs);
+    if (!reversal) {
+      review.push({ row: refund, reason: "refund_without_reversal" });
+      continue;
+    }
+    used.add(reversal);
+    if (!refundPairIsConsistent(refund, reversal)) {
+      review.push({ row: refund, reason: "refund_reversal_mismatch" });
+      review.push({ row: reversal, reason: "refund_reversal_mismatch" });
+      continue;
+    }
+    applied.push({
+      credit: reversal.credit,
+      debit: reversal.debit,
+      ccFee: -Math.abs(reversal.ccFee),
+      wheelbaseFee: -Math.abs(reversal.wheelbaseFee),
+      pending: reversal.pending,
+    });
+  }
+  for (const reversal of reversals) {
+    if (!used.has(reversal)) review.push({ row: reversal, reason: "reversal_without_refund" });
+  }
+  review.sort((a, b) => a.row.rowNumber - b.row.rowNumber);
+  return { applied, review };
+}
 
 function wheelbaseCountsAsIncome(status: string, payoutCents: number): boolean {
   const normalized = status.trim().toLowerCase();
@@ -169,6 +248,7 @@ function parseWheelbase(
   const reviewItems: ReviewItem[] = [];
   const knownByBooking = new Map<string, KnownTxn[]>();
   const bookingsWithRows = new Set<string>();
+  const refundsByBooking = new Map<string, RefundTxn[]>();
 
   transactions.table.rows.forEach((cells, index) => {
     const record = rowRecord(transactions.table.headers, cells);
@@ -186,7 +266,7 @@ function parseWheelbase(
       return;
     }
     bookingsWithRows.add(bookingId);
-    if (!KNOWN_TYPES.has(typeRaw)) {
+    if (!KNOWN_TYPES.has(typeRaw) && !REFUND_TYPES.has(typeRaw)) {
       reviewItems.push({
         rowNumber,
         kind: "unknown_type",
@@ -201,7 +281,15 @@ function parseWheelbase(
     const debit = parseMoneyOrZero(record.Debit ?? "");
     const ccFee = parseMoneyOrZero(record["CC Fee"] ?? "");
     const wheelbaseFee = parseMoneyOrZero(record["Wheelbase Fee"] ?? "");
-    if (deposit === "bad" || credit === null || debit === null || ccFee === null || wheelbaseFee === null) {
+    const amount = REFUND_TYPES.has(typeRaw) ? parseMoneyToCents(record.Amount ?? "") : 0;
+    if (
+      deposit === "bad" ||
+      credit === null ||
+      debit === null ||
+      ccFee === null ||
+      wheelbaseFee === null ||
+      amount === null
+    ) {
       reviewItems.push({
         rowNumber,
         kind: "unparsed",
@@ -209,6 +297,22 @@ function parseWheelbase(
         typeRaw,
         detail: detailFrom(record, TRANSACTION_DETAIL_KEYS, { bookingId, reason: "unparsed_amount_or_date" }),
       });
+      return;
+    }
+    if (REFUND_TYPES.has(typeRaw)) {
+      const refunds = refundsByBooking.get(bookingId) ?? [];
+      refunds.push({
+        rowNumber,
+        type: typeRaw === "Refund" ? "Refund" : "Reversal",
+        amountAbs: Math.abs(amount),
+        credit,
+        debit,
+        ccFee,
+        wheelbaseFee,
+        pending: deposit === "pending",
+        detail: detailFrom(record, TRANSACTION_DETAIL_KEYS, { bookingId }),
+      });
+      refundsByBooking.set(bookingId, refunds);
       return;
     }
     const bucket = knownByBooking.get(bookingId) ?? [];
@@ -222,6 +326,24 @@ function parseWheelbase(
     });
     knownByBooking.set(bookingId, bucket);
   });
+
+  for (const [bookingId, rows] of refundsByBooking) {
+    const paired = pairWheelbaseRefunds(rows);
+    if (paired.applied.length > 0) {
+      const bucket = knownByBooking.get(bookingId) ?? [];
+      for (const txn of paired.applied) bucket.push({ ...txn, bookingId });
+      knownByBooking.set(bookingId, bucket);
+    }
+    for (const { row, reason } of paired.review) {
+      reviewItems.push({
+        rowNumber: row.rowNumber,
+        kind: "unparsed",
+        externalTripId: bookingId,
+        typeRaw: row.type,
+        detail: { ...row.detail, reason },
+      });
+    }
+  }
 
   const seen = new Set<string>();
   const trips: MappedTrip[] = [];
