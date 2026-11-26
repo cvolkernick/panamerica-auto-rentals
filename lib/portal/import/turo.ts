@@ -67,6 +67,35 @@ export const TURO_REQUIRED_HEADERS = [
   "Total earnings",
 ] as const;
 
+/**
+ * Headers of Turo's 8-column earnings activity export (`earnings_export_*.csv`).
+ * It lists payouts and per-trip earning lines, but has no VIN, trip dates,
+ * trip status or trip price, so it cannot be the trip import. See spec §2.2.
+ */
+export const TURO_ACTIVITY_HEADERS = [
+  "Type",
+  "Reservation URL",
+  "Vehicle",
+  "Vehicle ID",
+  "Date",
+  "Earnings",
+  "Payment",
+  "Failed payment",
+] as const;
+
+export const TURO_ACTIVITY_REPORT_ERROR =
+  "This is Turo's earnings activity export (earnings_export_….csv). It lists payouts, not trips, " +
+  "and has no VIN, trip dates, trip status or trip price, so nothing was imported. " +
+  "In Turo on the web, open Business › Earnings, choose the Trip earnings view, set the date range " +
+  "(all time for the first import) and export that CSV instead. It is usually named trip_earnings_export_….csv.";
+
+/** True when the headers look like the earnings activity export rather than the trip earnings export. */
+export function isTuroActivityExport(headers: readonly string[]): boolean {
+  const present = new Set(headers.map((header) => header.trim().toLowerCase()));
+  if (present.has("reservation id") || present.has("trip start")) return false;
+  return ["type", "reservation url", "earnings", "payment"].every((name) => present.has(name));
+}
+
 export function normalizeVin(value: string | null | undefined): string | null {
   if (!value) return null;
   const vin = value.toUpperCase().replace(/[\s-]/g, "");
@@ -152,6 +181,7 @@ function parseTuro(input: MapperInput): { ok: true; value: { trips: MappedTrip[]
   if (!parsed.ok) return parsed;
   const missing = missingHeaders(parsed.table.headers, TURO_REQUIRED_HEADERS);
   if (missing.length > 0) {
+    if (isTuroActivityExport(parsed.table.headers)) return { ok: false, error: TURO_ACTIVITY_REPORT_ERROR };
     return {
       ok: false,
       error: `This Turo file is missing required columns: ${missing.join(", ")}.`,

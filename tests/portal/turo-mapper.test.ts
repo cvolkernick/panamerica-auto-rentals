@@ -193,3 +193,60 @@ describe("turo mapper", () => {
     assert.equal(JSON.stringify(parsed.value).includes("Test Guest"), false);
   });
 });
+
+describe("Turo earnings activity export (wrong report)", () => {
+  const activityHeaders = [
+    "Type",
+    "Reservation URL",
+    "Vehicle",
+    "Vehicle ID",
+    "Date",
+    "Earnings",
+    "Payment",
+    "Failed payment",
+  ];
+  const activityCsv = [
+    activityHeaders.map((header) => `"${header}"`).join(","),
+    '"Test Guest’s trip\nWith Test Model 2024","https://turo.com//reservation/10000001","Test Model 2024","10001","2026-11-02","$50.00","",""',
+    '"Payment(*******0000)","N/A","","","2026-11-03","","$50.00",""',
+  ].join("\n");
+
+  test("detects the activity export by its headers", async () => {
+    const { isTuroActivityExport } = await import("../../lib/portal/import/turo");
+    assert.equal(isTuroActivityExport(activityHeaders), true);
+    assert.equal(isTuroActivityExport([...TURO_HEADERS]), false);
+    assert.equal(isTuroActivityExport(["Type", "Date", "Amount"]), false);
+  });
+
+  test("Turo mapper names the right report instead of listing missing columns", async () => {
+    const { TURO_ACTIVITY_REPORT_ERROR } = await import("../../lib/portal/import/turo");
+    const parsed = turoMapper.parse({
+      file: { filename: "earnings_export_20261126.csv", text: `\uFEFF${activityCsv}`, bytes: activityCsv.length },
+    });
+    assert.equal(parsed.ok, false);
+    if (!parsed.ok) {
+      assert.equal(parsed.error, TURO_ACTIVITY_REPORT_ERROR);
+      assert.match(parsed.error, /Trip earnings/);
+      assert.doesNotMatch(parsed.error, /Test Guest/);
+    }
+  });
+
+  test("header detection without a platform gives the same guidance", async () => {
+    const { selectMapper } = await import("../../lib/portal/import/registry");
+    const { TURO_ACTIVITY_REPORT_ERROR } = await import("../../lib/portal/import/turo");
+    const selected = selectMapper({
+      platform: null,
+      file: { filename: "earnings_export.csv", text: activityCsv, bytes: activityCsv.length },
+      reservations: null,
+      transactions: null,
+    });
+    assert.equal(selected.ok, false);
+    if (!selected.ok) assert.equal(selected.error, TURO_ACTIVITY_REPORT_ERROR);
+  });
+
+  test("the 47-column trip earnings export still parses", () => {
+    const trips = parseRows(turoCsv([turoRow()]));
+    assert.equal(trips.length, 1);
+    assert.equal(trips[0].error, null);
+  });
+});

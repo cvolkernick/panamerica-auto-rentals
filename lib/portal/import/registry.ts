@@ -1,5 +1,5 @@
 import { missingHeaders, parseCsv } from "./csv";
-import { turoMapper, TURO_REQUIRED_HEADERS } from "./turo";
+import { isTuroActivityExport, turoMapper, TURO_ACTIVITY_REPORT_ERROR, TURO_REQUIRED_HEADERS } from "./turo";
 import type { ImportUpload, PlatformMapper } from "./types";
 import {
   wheelbaseMapper,
@@ -39,6 +39,9 @@ export function selectMapper(
   if (!parsed.ok) return parsed;
   const turo = mappers.find((mapper) => mapper.platform === "turo");
   if (turo?.canParse("single", parsed.table.headers)) return { ok: true, mapper: turo };
+  if (turo && isTuroActivityExport(parsed.table.headers)) {
+    return { ok: false, error: TURO_ACTIVITY_REPORT_ERROR };
+  }
   const wheelbase = mappers.find((mapper) => mapper.platform === "wheelbase");
   if (
     wheelbase?.canParse("reservations", parsed.table.headers) ||
