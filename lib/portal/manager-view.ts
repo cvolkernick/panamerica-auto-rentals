@@ -17,6 +17,7 @@
 import type { PortalD1 } from "./d1";
 import { forbidden, json, validationError } from "./http";
 import { currentMonthEastern, monthBounds, todayEastern } from "./ledger";
+import { carLedgerStart, clampToLedgerStart } from "./ledger-start";
 import {
   assignmentCovers,
   findManagerRole,
@@ -206,20 +207,22 @@ async function statementJson(
 ) {
   const bounds = monthBounds(month);
   const scoped = clipWindows(windows, bounds);
+  // Rows before the car's ledger start never count (see ledger-start.ts).
+  const counted = clampToLedgerStart(bounds, await carLedgerStart(db, carId));
   const [trips, expenses] = await Promise.all([
     db
       .prepare(
         `SELECT id, platform, start_date, end_date, status, counts_as_income, payout_cents, tax_cents
            FROM trips WHERE car_id = ? AND start_date >= ? AND start_date < ? ORDER BY start_date, id`
       )
-      .bind(carId, bounds.start, bounds.end)
+      .bind(carId, counted.start, counted.end)
       .all<TripRow>(),
     db
       .prepare(
         `SELECT id, entry_date, category, amount_cents, note
            FROM expenses WHERE car_id = ? AND entry_date >= ? AND entry_date < ? ORDER BY entry_date, id`
       )
-      .bind(carId, bounds.start, bounds.end)
+      .bind(carId, counted.start, counted.end)
       .all<ExpenseRow>(),
   ]);
   // A trip belongs to whoever managed the car on its start date (same rule as accrual).
@@ -283,22 +286,24 @@ async function statementJson(
 async function ledgerJson(db: PortalD1, carId: number, windows: Window[], month: string | null) {
   const bounds = month ? monthBounds(month) : null;
   const scoped = bounds ? clipWindows(windows, bounds) : windows;
+  const ledgerStart = await carLedgerStart(db, carId);
+  const counted = bounds ? clampToLedgerStart(bounds, ledgerStart) : null;
   // Payout rows are owner payouts: they stay out of the manager view.
-  const result = bounds
+  const result = counted
     ? await db
         .prepare(
           `SELECT id, entry_date, type, amount_cents, note FROM car_ledger
             WHERE car_id = ? AND type <> 'payout' AND entry_date >= ? AND entry_date < ?
             ORDER BY entry_date, id`
         )
-        .bind(carId, bounds.start, bounds.end)
+        .bind(carId, counted.start, counted.end)
         .all<LedgerRow>()
     : await db
         .prepare(
           `SELECT id, entry_date, type, amount_cents, note FROM car_ledger
-            WHERE car_id = ? AND type <> 'payout' ORDER BY entry_date, id`
+            WHERE car_id = ? AND type <> 'payout' AND entry_date >= ? ORDER BY entry_date, id`
         )
-        .bind(carId)
+        .bind(carId, ledgerStart)
         .all<LedgerRow>();
   const entries = result.results
     .filter((row) => inWindows(scoped, row.entry_date))

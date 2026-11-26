@@ -2,6 +2,7 @@ import type { PortalD1 } from "./d1";
 import type { ExpenseCategory } from "./expenses";
 import { plateFallbackText } from "./import/wheelbase";
 import type { ExpenseWrite } from "./validate";
+import { carLedgerStart, clampToLedgerStart } from "./ledger-start";
 
 export type ImportStatus = "preview" | "committed" | "discarded";
 export type MatchStatus = "matched" | "unmatched" | "ambiguous" | "invalid";
@@ -592,20 +593,30 @@ export async function getExpense(
     .first<ExpenseRow>();
 }
 
+/** Expenses that count: dated on or after the car's ledger start (see ledger-start.ts). */
 export async function listExpenses(
   db: PortalD1,
   carId: number,
-  bounds?: { start: string; end: string }
+  bounds?: { start: string; end: string },
+  knownLedgerStart?: string
 ): Promise<ExpenseRow[]> {
-  const sql = bounds
-    ? `SELECT id, car_id, entry_date, category, amount_cents, note, created_at, updated_at, created_by
-       FROM expenses WHERE car_id = ? AND entry_date >= ? AND entry_date < ? ORDER BY entry_date, id`
-    : `SELECT id, car_id, entry_date, category, amount_cents, note, created_at, updated_at, created_by
-       FROM expenses WHERE car_id = ? ORDER BY entry_date, id`;
-  const statement = db.prepare(sql);
-  const result = bounds
-    ? await statement.bind(carId, bounds.start, bounds.end).all<ExpenseRow>()
-    : await statement.bind(carId).all<ExpenseRow>();
+  const ledgerStart = knownLedgerStart ?? (await carLedgerStart(db, carId));
+  const columns = "id, car_id, entry_date, category, amount_cents, note, created_at, updated_at, created_by";
+  if (bounds) {
+    const counted = clampToLedgerStart(bounds, ledgerStart);
+    const result = await db
+      .prepare(
+        `SELECT ${columns}
+         FROM expenses WHERE car_id = ? AND entry_date >= ? AND entry_date < ? ORDER BY entry_date, id`
+      )
+      .bind(carId, counted.start, counted.end)
+      .all<ExpenseRow>();
+    return result.results;
+  }
+  const result = await db
+    .prepare(`SELECT ${columns} FROM expenses WHERE car_id = ? AND entry_date >= ? ORDER BY entry_date, id`)
+    .bind(carId, ledgerStart)
+    .all<ExpenseRow>();
   return result.results;
 }
 
@@ -659,67 +670,67 @@ function totalsFrom(sum: SumRow | null, expenseCents: number) {
   };
 }
 
+/** Rows dated before the car's ledger start never count (see ledger-start.ts). */
+function countedRange(ledgerStart: string, bounds?: { start?: string; end?: string }) {
+  const start = bounds?.start && bounds.start > ledgerStart ? bounds.start : ledgerStart;
+  return { start, end: bounds?.end };
+}
+
 async function expenseSum(
   db: PortalD1,
   carId: number,
+  ledgerStart: string,
   bounds?: { start?: string; end: string }
 ): Promise<number> {
-  if (bounds?.start && bounds.end) {
-    const row = await db
-      .prepare(
-        `SELECT COALESCE(SUM(amount_cents), 0) AS expense_cents
-         FROM expenses WHERE car_id = ? AND entry_date >= ? AND entry_date < ?`
-      )
-      .bind(carId, bounds.start, bounds.end)
-      .first<{ expense_cents: number }>();
-    return Number(row?.expense_cents ?? 0);
-  }
-  if (bounds?.end) {
-    const row = await db
-      .prepare(
-        `SELECT COALESCE(SUM(amount_cents), 0) AS expense_cents
-         FROM expenses WHERE car_id = ? AND entry_date < ?`
-      )
-      .bind(carId, bounds.end)
-      .first<{ expense_cents: number }>();
-    return Number(row?.expense_cents ?? 0);
-  }
-  const row = await db
-    .prepare(`SELECT COALESCE(SUM(amount_cents), 0) AS expense_cents FROM expenses WHERE car_id = ?`)
-    .bind(carId)
-    .first<{ expense_cents: number }>();
+  const range = countedRange(ledgerStart, bounds);
+  const row = range.end
+    ? await db
+        .prepare(
+          `SELECT COALESCE(SUM(amount_cents), 0) AS expense_cents
+           FROM expenses WHERE car_id = ? AND entry_date >= ? AND entry_date < ?`
+        )
+        .bind(carId, range.start, range.end)
+        .first<{ expense_cents: number }>()
+    : await db
+        .prepare(
+          `SELECT COALESCE(SUM(amount_cents), 0) AS expense_cents
+           FROM expenses WHERE car_id = ? AND entry_date >= ?`
+        )
+        .bind(carId, range.start)
+        .first<{ expense_cents: number }>();
   return Number(row?.expense_cents ?? 0);
 }
 
 async function tripSum(
   db: PortalD1,
   carId: number,
+  ledgerStart: string,
   bounds?: { start?: string; end: string }
 ): Promise<SumRow | null> {
-  if (bounds?.start && bounds.end) {
+  const range = countedRange(ledgerStart, bounds);
+  if (range.end) {
     return db
       .prepare(`${TRIP_SUM_SQL} AND start_date >= ? AND start_date < ?`)
-      .bind(carId, bounds.start, bounds.end)
+      .bind(carId, range.start, range.end)
       .first<SumRow>();
   }
-  if (bounds?.end) {
-    return db
-      .prepare(`${TRIP_SUM_SQL} AND start_date < ?`)
-      .bind(carId, bounds.end)
-      .first<SumRow>();
-  }
-  return db.prepare(TRIP_SUM_SQL).bind(carId).first<SumRow>();
+  return db
+    .prepare(`${TRIP_SUM_SQL} AND start_date >= ?`)
+    .bind(carId, range.start)
+    .first<SumRow>();
 }
 
 export async function carMoneyReport(db: PortalD1, carId: number, month: string, bounds: { start: string; end: string }) {
+  const ledgerStart = await carLedgerStart(db, carId);
+  const counted = clampToLedgerStart(bounds, ledgerStart);
   const [monthSum, toDateSum, allSum, monthExpenses, toDateExpenses, allExpenses, trips, expenses, platforms] =
     await Promise.all([
-      tripSum(db, carId, bounds),
-      tripSum(db, carId, { end: bounds.end }),
-      tripSum(db, carId),
-      expenseSum(db, carId, bounds),
-      expenseSum(db, carId, { end: bounds.end }),
-      expenseSum(db, carId),
+      tripSum(db, carId, ledgerStart, bounds),
+      tripSum(db, carId, ledgerStart, { end: bounds.end }),
+      tripSum(db, carId, ledgerStart),
+      expenseSum(db, carId, ledgerStart, bounds),
+      expenseSum(db, carId, ledgerStart, { end: bounds.end }),
+      expenseSum(db, carId, ledgerStart),
       db
         .prepare(
           `SELECT id, platform, external_trip_id, start_at, end_at, start_date, end_date, status,
@@ -729,9 +740,9 @@ export async function carMoneyReport(db: PortalD1, carId: number, month: string,
            WHERE car_id = ? AND start_date >= ? AND start_date < ?
            ORDER BY start_date, id`
         )
-        .bind(carId, bounds.start, bounds.end)
+        .bind(carId, counted.start, counted.end)
         .all<ReportTripRow>(),
-      listExpenses(db, carId, bounds),
+      listExpenses(db, carId, bounds, ledgerStart),
       db
         .prepare(
           `SELECT platform, COALESCE(SUM(payout_cents), 0) AS payout_cents, SUM(tax_cents) AS tax_cents
@@ -740,13 +751,14 @@ export async function carMoneyReport(db: PortalD1, carId: number, month: string,
            GROUP BY platform
            ORDER BY platform`
         )
-        .bind(carId, bounds.start, bounds.end)
+        .bind(carId, counted.start, counted.end)
         .all<PlatformSumRow>(),
     ]);
 
   return {
     month,
     attribution: "A trip counts entirely in the month it starts. Trips are not split across months.",
+    ledgerStartDate: ledgerStart,
     monthTotals: totalsFrom(monthSum, monthExpenses),
     toDate: totalsFrom(toDateSum, toDateExpenses),
     allTime: totalsFrom(allSum, allExpenses),

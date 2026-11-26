@@ -11,6 +11,7 @@ import {
   type StatementTripInput,
 } from "./statement";
 import type { PayoutWrite } from "./validate";
+import { carLedgerStart } from "./ledger-start";
 
 export type PayoutRow = {
   id: number;
@@ -98,25 +99,32 @@ export function payoutJson(row: PayoutRow): StatementPayoutInput & { carId: numb
   };
 }
 
+/**
+ * Only rows on or after the car's ledger start feed the statement, so the first
+ * statement month opens at zero. Earlier rows stay stored (see ledger-start.ts).
+ */
 async function statementInputs(db: PortalD1, carId: number) {
-  const [trips, expenses, payouts] = await Promise.all([
+  const ledgerStart = await carLedgerStart(db, carId);
+  const startMonth = ledgerStart.slice(0, 7);
+  const [trips, expenses, allPayouts] = await Promise.all([
     db
       .prepare(
         `SELECT id, platform, external_trip_id, start_date, end_date, status, counts_as_income,
                 payout_cents, tax_cents, pending_payout_cents, has_pending
-         FROM trips WHERE car_id = ? ORDER BY start_date, id`
+         FROM trips WHERE car_id = ? AND start_date >= ? ORDER BY start_date, id`
       )
-      .bind(carId)
+      .bind(carId, ledgerStart)
       .all<StatementTripRow>(),
     db
       .prepare(
         `SELECT id, entry_date, category, amount_cents, note
-         FROM expenses WHERE car_id = ? ORDER BY entry_date, id`
+         FROM expenses WHERE car_id = ? AND entry_date >= ? ORDER BY entry_date, id`
       )
-      .bind(carId)
+      .bind(carId, ledgerStart)
       .all<StatementExpenseRow>(),
     listPayouts(db, carId),
   ]);
+  const payouts = allPayouts.filter((row) => row.period_month >= startMonth);
   const tripInputs: StatementTripInput[] = trips.results.map((row) => ({
     id: Number(row.id),
     platform: row.platform,
@@ -143,7 +151,7 @@ async function statementInputs(db: PortalD1, carId: number) {
     amountCents: Number(row.amount_cents),
     note: row.note,
   }));
-  return { trips: tripInputs, expenses: expenseInputs, payouts: payoutInputs };
+  return { ledgerStart, trips: tripInputs, expenses: expenseInputs, payouts: payoutInputs };
 }
 
 function historyRow(statement: MonthStatement) {
@@ -164,7 +172,7 @@ function historyRow(statement: MonthStatement) {
 
 /** One car only. Callers check admin access or owner_id before calling. */
 export async function carStatement(db: PortalD1, car: CarRow, month: string, currentMonth: string) {
-  const inputs = await statementInputs(db, Number(car.id));
+  const { ledgerStart, ...inputs } = await statementInputs(db, Number(car.id));
   const lastMonth = month > currentMonth ? month : currentMonth;
   const statements = buildStatements({ ...inputs, lastMonth, currentMonth });
   const statement = statementForMonth(statements, month, currentMonth);
@@ -178,6 +186,7 @@ export async function carStatement(db: PortalD1, car: CarRow, month: string, cur
     },
     month,
     currentMonth,
+    ledgerStartDate: ledgerStart,
     feeTiers: FEE_TIERS.map((tier) => ({
       label: tier.label,
       minDays: tier.minDays,
@@ -187,6 +196,7 @@ export async function carStatement(db: PortalD1, car: CarRow, month: string, cur
     rules: {
       attribution: "A trip counts entirely in the month it starts. Expenses count in the month they are dated.",
       fee: "The management fee is figured per trip on its counted income, before expenses, and is booked as the last expense of the month.",
+      start: `Money counts from ${ledgerStart}. Earlier trips, expenses, and payouts stay on file but do not count, so the first month opens at $0.00.`,
       carry: "Each car has one running balance. Unpaid surplus and shortfalls both carry into the next month. A payout is due only when the accrued balance, after payouts already made, is above zero.",
     },
     statement,
