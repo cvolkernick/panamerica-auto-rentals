@@ -319,7 +319,7 @@ export function ImportsAdmin() {
     if (platform) form.set("platform", platform);
     if (platform === "wheelbase") {
       if (!reservations || !transactions) {
-        setNotice("Wheelbase needs both the reservations file and the transaction log.");
+        setNotice("Wheelbase needs both the bookings file and the transactions file.");
         return;
       }
       form.set("reservations", reservations);
@@ -426,7 +426,7 @@ export function ImportsAdmin() {
         </PortalField>
         {platform === "wheelbase" ? (
           <>
-            <PortalField id="import-reservations" label="Reservations CSV">
+            <PortalField id="import-reservations" label="Bookings CSV (booking-export.csv)">
               <Input
                 id="import-reservations"
                 type="file"
@@ -435,7 +435,7 @@ export function ImportsAdmin() {
                 onChange={(event) => setReservations(event.target.files?.[0] ?? null)}
               />
             </PortalField>
-            <PortalField id="import-transactions" label="Transactions CSV">
+            <PortalField id="import-transactions" label="Transactions CSV (transactions-export.csv)">
               <Input
                 id="import-transactions"
                 type="file"
