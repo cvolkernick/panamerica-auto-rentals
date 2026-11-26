@@ -44,7 +44,7 @@ export function selectMapper(
     wheelbase?.canParse("reservations", parsed.table.headers) ||
     wheelbase?.canParse("transactions", parsed.table.headers)
   ) {
-    return { ok: false, error: "Wheelbase needs both the reservations file and the transaction log." };
+    return { ok: false, error: "Wheelbase needs both the bookings file and the transactions file." };
   }
   if (missingHeaders(parsed.table.headers, TURO_REQUIRED_HEADERS).length > 0) {
     const reservationHits = WHEELBASE_RESERVATION_HEADERS.some((header) =>
@@ -54,7 +54,7 @@ export function selectMapper(
       parsed.table.headers.includes(header)
     );
     if (reservationHits || transactionHits) {
-      return { ok: false, error: "Wheelbase needs both the reservations file and the transaction log." };
+      return { ok: false, error: "Wheelbase needs both the bookings file and the transactions file." };
     }
   }
   return {
