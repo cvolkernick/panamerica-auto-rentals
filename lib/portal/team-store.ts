@@ -1,5 +1,6 @@
 import { randomToken } from "./codec";
 import type { D1Prepared, PortalD1 } from "./d1";
+import { carLedgerStart, clampToLedgerStart } from "./ledger-start";
 import { adminEmailSet } from "./db";
 import type { PortalEnv } from "./env";
 import { isMissingAccountColumn } from "./managers";
@@ -241,17 +242,20 @@ export async function listIncome(
   carId: number,
   bounds?: { start: string; end: string }
 ): Promise<IncomeRow[]> {
-  const result = bounds
+  // Income lists only trips that count: on or after the car's ledger start.
+  const ledgerStart = await carLedgerStart(db, carId);
+  const counted = bounds ? clampToLedgerStart(bounds, ledgerStart) : null;
+  const result = counted
     ? await db
         .prepare(
           `SELECT ${INCOME_COLUMNS} FROM trips
            WHERE car_id = ? AND start_date >= ? AND start_date < ? ORDER BY start_date, id`
         )
-        .bind(carId, bounds.start, bounds.end)
+        .bind(carId, counted.start, counted.end)
         .all<IncomeRow>()
     : await db
-        .prepare(`SELECT ${INCOME_COLUMNS} FROM trips WHERE car_id = ? ORDER BY start_date, id`)
-        .bind(carId)
+        .prepare(`SELECT ${INCOME_COLUMNS} FROM trips WHERE car_id = ? AND start_date >= ? ORDER BY start_date, id`)
+        .bind(carId, ledgerStart)
         .all<IncomeRow>();
   return result.results;
 }

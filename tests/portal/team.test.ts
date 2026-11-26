@@ -6,7 +6,7 @@ import { handlePortal } from "../../lib/portal/handler";
 import type { D1Prepared, PortalD1 } from "../../lib/portal/d1";
 import { noteLooksLikePii, parseAgentName, resetTeamRateLimit, TEAM_RATE_LIMIT } from "../../lib/portal/team";
 import { MAX_ENTRY_CENTS } from "../../lib/portal/team-store";
-import { call, devEnv, PANAMERICA, requireDb } from "./support";
+import { call, devEnv, PANAMERICA, requireDb, startLedgerEarly } from "./support";
 
 const TOKEN = "t".repeat(24) + "-team-test-token-0123456789";
 const AGENT = "Forge ⚡ test";
@@ -201,6 +201,7 @@ describe("team connector income and money rules", () => {
   test("manual income flows through the statement fee tiers and carry-forward", async () => {
     const env = teamEnv();
     const carId = await seedCar(env);
+    await startLedgerEarly(env, carId);
     // 3-day trip: 20% fee on the platform net payout.
     const short = await team(env, "POST", `/cars/${carId}/income`, {
       startDate: "2026-10-01",
@@ -396,6 +397,7 @@ describe("team connector gate fixes", () => {
   test("exact tier edges: 6 days 20%, 7 days 15%, 21 days 15%, 22 days 10%", async () => {
     const env = teamEnv();
     const carId = await seedCar(env);
+    await startLedgerEarly(env, carId);
     const trips = [
       { startDate: "2026-09-01", endDate: "2026-09-07" }, // 6 days
       { startDate: "2026-09-02", endDate: "2026-09-09" }, // 7 days
